@@ -12,6 +12,7 @@
 const APP_CONFIG = {
   menuKasir: 'Kasir',
   menuDashboard: 'Dashboard',
+  titleIndex: 'Paket Sembako',
   titleKasir: 'Form Kasir',
   titleDashboard: 'Dashboard Penjualan',
   cachePrefix: 'dashboard:data:v',
@@ -106,7 +107,12 @@ const FIELD_ALIASES = {
  */
 function onOpen() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureCoreSheets_(ss);
+  try {
+    ensureCoreSheets_(ss);
+  } catch (err) {
+    // Jangan hentikan pembuatan menu jika auto-setup gagal.
+    Logger.log('onOpen ensureCoreSheets_ error: ' + err);
+  }
 
   const ui = SpreadsheetApp.getUi();
 
@@ -122,6 +128,7 @@ function onOpen() {
 
   ui
     .createMenu(APP_CONFIG.menuDashboard)
+    .addItem('Buka Halaman Utama', 'showIndex')
     .addItem('Buka Dashboard', 'showDashboard')
     .addItem('Buka Sidebar Dashboard', 'showDashboardSidebar')
     .addSeparator()
@@ -156,6 +163,17 @@ function showKasirModal() {
 }
 
 /**
+ * Menampilkan index utama dalam modal.
+ */
+function showIndex() {
+  const html = HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle(APP_CONFIG.titleIndex)
+    .setWidth(980)
+    .setHeight(760);
+  SpreadsheetApp.getUi().showModalDialog(html, APP_CONFIG.titleIndex);
+}
+
+/**
  * Menampilkan dashboard dalam modal.
  */
 function showDashboard() {
@@ -176,18 +194,36 @@ function showDashboardSidebar() {
 
 /**
  * Endpoint Web App:
- * - default: dashboard
+ * - default: index
  * - ?view=kasir: kasir
+ * - ?view=dashboard: dashboard
  */
 function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ensureCoreSheets_(ss);
+  try {
+    ensureCoreSheets_(ss);
+  } catch (err) {
+    // Tetap render halaman agar user bisa lihat status.
+    Logger.log('doGet ensureCoreSheets_ error: ' + err);
+  }
 
   const view = safeText_(e && e.parameter && e.parameter.view).toLowerCase();
-  const template = view === 'kasir' ? 'Kasir' : 'Dashboard';
+  let template = 'Index';
+  if (view === 'kasir') {
+    template = 'Kasir';
+  } else if (view === 'dashboard') {
+    template = 'Dashboard';
+  }
+
+  let title = APP_CONFIG.titleIndex;
+  if (template === 'Kasir') {
+    title = APP_CONFIG.titleKasir;
+  } else if (template === 'Dashboard') {
+    title = APP_CONFIG.titleDashboard;
+  }
 
   return HtmlService.createHtmlOutputFromFile(template)
-    .setTitle(template === 'Kasir' ? APP_CONFIG.titleKasir : APP_CONFIG.titleDashboard)
+    .setTitle(title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -692,6 +728,70 @@ function ensureCoreSheets_(ss, options) {
   );
 
   return messages;
+}
+
+/**
+ * Status koneksi aplikasi terhadap sheet sumber.
+ * Dipakai oleh Index (halaman utama Web App).
+ * @return {Object}
+ */
+function getAppConnectionStatus() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const autoSetupMessages = ensureCoreSheets_(ss);
+  const warnings = [];
+  const state = collectBusinessState_(ss, warnings);
+
+  const rekapProdukSheet = findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PRODUK);
+  const rekapPelangganSheet = findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PELANGGAN);
+
+  return {
+    meta: {
+      spreadsheetName: ss.getName(),
+      spreadsheetId: ss.getId(),
+      generatedAt: new Date().toISOString(),
+      timezone: ss.getSpreadsheetTimeZone() || Session.getScriptTimeZone(),
+      warnings: autoSetupMessages.concat(warnings),
+    },
+    sheets: {
+      PRODUK: buildSheetStatusInfo_(state.productsContext.sheet),
+      PENJUALAN: buildSheetStatusInfo_(state.salesContext.sheet),
+      REKAP_PRODUK: buildSheetStatusInfo_(rekapProdukSheet),
+      REKAP_PELANGGAN: buildSheetStatusInfo_(rekapPelangganSheet),
+    },
+    stats: {
+      totalProduk: state.products.length,
+      totalTransaksi: state.sales.length,
+      totalPelanggan: Object.keys(state.customerAgg).length,
+    },
+  };
+}
+
+/**
+ * Bentuk status sederhana per sheet.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet|null} sheet
+ * @return {{exists:boolean,name:string,rowCount:number,lastRow:number,lastColumn:number}}
+ */
+function buildSheetStatusInfo_(sheet) {
+  if (!sheet) {
+    return {
+      exists: false,
+      name: '',
+      rowCount: 0,
+      lastRow: 0,
+      lastColumn: 0,
+    };
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  return {
+    exists: true,
+    name: sheet.getName(),
+    rowCount: Math.max(0, lastRow - 1),
+    lastRow: lastRow,
+    lastColumn: lastColumn,
+  };
 }
 
 /**

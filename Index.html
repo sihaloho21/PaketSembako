@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Paket Sembako</title>
+    <style>
+      :root {
+        --bg: #f3f7fb;
+        --panel: #ffffff;
+        --line: #d8e2ef;
+        --ink: #1b2533;
+        --sub: #5f6f82;
+        --brand: #0b7285;
+        --brand-2: #1864ab;
+        --ok: #2b8a3e;
+        --warn: #b26a00;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(180deg, #f9fcff 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      .container {
+        width: 100%;
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      .hero {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 14px;
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .hero p {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: var(--sub);
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(140px, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .btn {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .btn-primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+      }
+
+      .btn-secondary {
+        background: var(--brand-2);
+        border-color: var(--brand-2);
+        color: #fff;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(150px, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .stat {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .stat .k {
+        font-size: 12px;
+        color: var(--sub);
+      }
+
+      .stat .v {
+        margin-top: 6px;
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #ebf0f6;
+        padding: 9px 8px;
+        text-align: left;
+      }
+
+      .status-ok {
+        color: var(--ok);
+        font-weight: 700;
+      }
+
+      .status-miss {
+        color: #c92a2a;
+        font-weight: 700;
+      }
+
+      .muted {
+        color: var(--sub);
+      }
+
+      .warnings {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--warn);
+        background: #fff8e1;
+        border: 1px solid #f2d39c;
+        border-radius: 10px;
+        padding: 9px;
+        display: none;
+      }
+
+      .footnote {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--sub);
+      }
+
+      @media (max-width: 760px) {
+        .actions,
+        .stats {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="hero">
+        <h1>Paket Sembako</h1>
+        <p>Halaman utama web app untuk akses Kasir, Dashboard, dan status koneksi data spreadsheet.</p>
+
+        <div class="actions">
+          <button id="btnKasir" class="btn btn-primary">Buka Kasir</button>
+          <button id="btnDashboard" class="btn btn-secondary">Buka Dashboard</button>
+          <button id="btnRefresh" class="btn">Refresh Status</button>
+        </div>
+      </section>
+
+      <section class="stats">
+        <article class="stat">
+          <div class="k">Total Produk</div>
+          <div class="v" id="statProduk">0</div>
+        </article>
+        <article class="stat">
+          <div class="k">Total Transaksi</div>
+          <div class="v" id="statTransaksi">0</div>
+        </article>
+        <article class="stat">
+          <div class="k">Total Pelanggan</div>
+          <div class="v" id="statPelanggan">0</div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Status Koneksi Sheet</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Sheet</th>
+              <th>Status</th>
+              <th>Jumlah Data</th>
+              <th>Last Row</th>
+              <th>Last Col</th>
+            </tr>
+          </thead>
+          <tbody id="sheetTbody"></tbody>
+        </table>
+        <div class="warnings" id="warningsBox"></div>
+        <div class="footnote muted" id="metaInfo">Memuat status...</div>
+      </section>
+    </main>
+
+    <script>
+      function init() {
+        document.getElementById('btnKasir').addEventListener('click', function () {
+          window.location.href = withViewParam_('kasir');
+        });
+
+        document.getElementById('btnDashboard').addEventListener('click', function () {
+          window.location.href = withViewParam_('dashboard');
+        });
+
+        document.getElementById('btnRefresh').addEventListener('click', function () {
+          loadStatus();
+        });
+
+        if (!isAppsScriptRuntime_()) {
+          document.getElementById('metaInfo').textContent =
+            'google.script.run tidak tersedia. Halaman ini harus dibuka dari deploy Web App Apps Script.';
+          return;
+        }
+
+        loadStatus();
+      }
+
+      function loadStatus() {
+        document.getElementById('metaInfo').textContent = 'Memuat status koneksi...';
+
+        google.script.run
+          .withSuccessHandler(function (payload) {
+            renderStatus(payload || {});
+          })
+          .withFailureHandler(function (error) {
+            document.getElementById('metaInfo').textContent = 'Gagal memuat status: ' + extractError_(error);
+          })
+          .getAppConnectionStatus();
+      }
+
+      function renderStatus(payload) {
+        const stats = payload.stats || {};
+        const sheets = payload.sheets || {};
+        const meta = payload.meta || {};
+
+        document.getElementById('statProduk').textContent = formatNumber_(stats.totalProduk || 0);
+        document.getElementById('statTransaksi').textContent = formatNumber_(stats.totalTransaksi || 0);
+        document.getElementById('statPelanggan').textContent = formatNumber_(stats.totalPelanggan || 0);
+
+        const tbody = document.getElementById('sheetTbody');
+        tbody.innerHTML = '';
+
+        ['PRODUK', 'PENJUALAN', 'REKAP_PRODUK', 'REKAP_PELANGGAN'].forEach(function (sheetName) {
+          const info = sheets[sheetName] || {};
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + sheetName + '</td>' +
+            '<td class=\"' + (info.exists ? 'status-ok' : 'status-miss') + '\">' + (info.exists ? 'Terhubung' : 'Tidak Ada') + '</td>' +
+            '<td>' + formatNumber_(info.rowCount || 0) + '</td>' +
+            '<td>' + formatNumber_(info.lastRow || 0) + '</td>' +
+            '<td>' + formatNumber_(info.lastColumn || 0) + '</td>';
+          tbody.appendChild(tr);
+        });
+
+        const warningsBox = document.getElementById('warningsBox');
+        if (meta.warnings && meta.warnings.length) {
+          warningsBox.style.display = 'block';
+          warningsBox.innerHTML = meta.warnings.map(function (w) { return '- ' + escapeHtml_(w); }).join('<br>');
+        } else {
+          warningsBox.style.display = 'none';
+          warningsBox.textContent = '';
+        }
+
+        const stamp = meta.generatedAt ? new Date(meta.generatedAt) : null;
+        const stampText = stamp && !Number.isNaN(stamp.getTime())
+          ? stamp.toLocaleString('id-ID')
+          : '-';
+        document.getElementById('metaInfo').textContent =
+          'Spreadsheet: ' + (meta.spreadsheetName || '-') +
+          ' | Timezone: ' + (meta.timezone || '-') +
+          ' | Update: ' + stampText;
+      }
+
+      function withViewParam_(view) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('view', view);
+        return url.toString();
+      }
+
+      function isAppsScriptRuntime_() {
+        return typeof google !== 'undefined' && google && google.script && google.script.run;
+      }
+
+      function extractError_(error) {
+        if (!error) {
+          return 'Unknown error';
+        }
+        return error.message || String(error);
+      }
+
+      function formatNumber_(value) {
+        return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Number(value) || 0);
+      }
+
+      function escapeHtml_(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+    </script>
+  </body>
+</html>
