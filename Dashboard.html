@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Penjualan</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --line: #d9e1ec;
+        --ink: #1b2533;
+        --sub: #5a6a7d;
+        --brand: #1864ab;
+        --brand-soft: #e3f2fd;
+        --warn: #b26a00;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      .container {
+        width: 100%;
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        margin: 4px 0 0;
+        color: var(--sub);
+        font-size: 13px;
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 13px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .btn:hover {
+        border-color: var(--brand);
+        color: var(--brand);
+      }
+
+      .stamp {
+        font-size: 12px;
+        color: var(--sub);
+      }
+
+      .warning {
+        display: none;
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #f1d5a8;
+        background: #fff8e1;
+        color: var(--warn);
+        font-size: 13px;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .card .label {
+        font-size: 12px;
+        color: var(--sub);
+        margin-bottom: 8px;
+      }
+
+      .card .value {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+
+      .card .chip {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 3px 8px;
+        background: var(--brand-soft);
+        color: var(--brand);
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .charts {
+        display: grid;
+        grid-template-columns: 2fr 1.4fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .panel h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
+      .chart-box {
+        position: relative;
+        width: 100%;
+        min-height: 280px;
+      }
+
+      .chart-box.pie {
+        min-height: 320px;
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: 320px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      thead th {
+        position: sticky;
+        top: 0;
+        background: #f1f6fc;
+        text-align: left;
+        padding: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      tbody td {
+        padding: 9px 10px;
+        border-bottom: 1px solid #eef2f7;
+      }
+
+      tbody tr:hover {
+        background: #f8fbff;
+      }
+
+      .num {
+        text-align: right;
+      }
+
+      .empty {
+        padding: 12px;
+        color: var(--sub);
+        font-size: 13px;
+      }
+
+      .loading {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        background: rgba(17, 24, 39, 0.92);
+        color: #fff;
+        font-size: 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        display: none;
+      }
+
+      @media (max-width: 980px) {
+        .cards {
+          grid-template-columns: repeat(2, minmax(140px, 1fr));
+        }
+
+        .charts {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .container {
+          padding: 12px;
+        }
+
+        .cards {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="topbar">
+        <div>
+          <h1 class="title">Dashboard Penjualan</h1>
+          <p class="subtitle">Sumber: PRODUK, PENJUALAN, REKAP_PRODUK, REKAP_PELANGGAN</p>
+        </div>
+        <div class="top-actions">
+          <div class="stamp" id="lastUpdated">Belum ada data</div>
+          <button class="btn" id="btnRefresh">Refresh</button>
+        </div>
+      </header>
+
+      <div class="warning" id="warningBox"></div>
+
+      <section class="cards">
+        <article class="card">
+          <div class="label">Total Omzet Hari Ini</div>
+          <div class="value" id="kpiOmzet">Rp0</div>
+          <div class="chip">KPI Harian</div>
+        </article>
+        <article class="card">
+          <div class="label">Total Laba Kotor</div>
+          <div class="value" id="kpiProfit">Rp0</div>
+          <div class="chip">Akumulasi</div>
+        </article>
+        <article class="card">
+          <div class="label">Jumlah Transaksi</div>
+          <div class="value" id="kpiTransaksi">0</div>
+          <div class="chip">Dari PENJUALAN</div>
+        </article>
+        <article class="card">
+          <div class="label">Jumlah Pelanggan</div>
+          <div class="value" id="kpiPelanggan">0</div>
+          <div class="chip">Pelanggan Aktif</div>
+        </article>
+      </section>
+
+      <section class="charts">
+        <article class="panel">
+          <h3>Omzet Harian (Line Chart)</h3>
+          <div class="chart-box"><canvas id="chartOmzet"></canvas></div>
+        </article>
+        <article class="panel">
+          <h3>Profit Total per Pelanggan (Pie Chart)</h3>
+          <div class="chart-box pie"><canvas id="chartPie"></canvas></div>
+        </article>
+      </section>
+
+      <section class="footer-grid">
+        <article class="panel">
+          <h3>Qty Terjual per Produk (Bar Chart)</h3>
+          <div class="chart-box"><canvas id="chartProduk"></canvas></div>
+        </article>
+
+        <article class="panel">
+          <h3>Belanja & Profit per Pelanggan</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pelanggan</th>
+                  <th class="num">Total Belanja</th>
+                  <th class="num">Total Profit</th>
+                </tr>
+              </thead>
+              <tbody id="pelangganTbody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="tableEmpty" style="display: none">Belum ada data pelanggan.</div>
+        </article>
+      </section>
+    </div>
+
+    <div class="loading" id="loadingFlag">Memuat dashboard...</div>
+
+    <script>
+      let lineChart;
+      let barChart;
+      let pieChart;
+
+      const INTERVAL_MS = 30000;
+
+      function init() {
+        document.getElementById('btnRefresh').addEventListener('click', function () {
+          fetchDashboard(true);
+        });
+
+        fetchDashboard(true);
+
+        setInterval(function () {
+          fetchDashboard(false);
+        }, INTERVAL_MS);
+
+        window.addEventListener('focus', function () {
+          fetchDashboard(false);
+        });
+      }
+
+      function fetchDashboard(forceRefresh) {
+        setLoading(true);
+        google.script.run
+          .withSuccessHandler(function (payload) {
+            setLoading(false);
+            renderDashboard(payload);
+          })
+          .withFailureHandler(function (error) {
+            setLoading(false);
+            showWarning(['Gagal mengambil data dashboard.', String(error && error.message ? error.message : error)]);
+          })
+          .getDashboardData(forceRefresh);
+      }
+
+      function renderDashboard(payload) {
+        if (!payload) {
+          showWarning(['Payload dashboard kosong.']);
+          return;
+        }
+
+        renderKpi(payload.kpi || {});
+        renderMeta(payload.meta || {});
+        renderLineChart(payload.charts && payload.charts.omzetHarian ? payload.charts.omzetHarian : { labels: [], values: [] });
+        renderBarChart(payload.charts && payload.charts.qtyProduk ? payload.charts.qtyProduk : { labels: [], values: [] });
+        renderPieChart(payload.charts && payload.charts.profitPelanggan ? payload.charts.profitPelanggan : { labels: [], values: [] });
+        renderPelangganTable(payload.tables && payload.tables.pelanggan ? payload.tables.pelanggan : []);
+      }
+
+      function renderKpi(kpi) {
+        document.getElementById('kpiOmzet').textContent = formatCurrency(kpi.omzetHariIni || 0);
+        document.getElementById('kpiProfit').textContent = formatCurrency(kpi.totalLabaKotor || 0);
+        document.getElementById('kpiTransaksi').textContent = formatNumber(kpi.totalTransaksi || 0);
+        document.getElementById('kpiPelanggan').textContent = formatNumber(kpi.totalPelanggan || 0);
+      }
+
+      function renderMeta(meta) {
+        if (meta.generatedAt) {
+          const dt = new Date(meta.generatedAt);
+          const text = Number.isNaN(dt.getTime())
+            ? meta.generatedAt
+            : dt.toLocaleString('id-ID', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              });
+          document.getElementById('lastUpdated').textContent = 'Update: ' + text;
+        }
+
+        if (meta.warnings && meta.warnings.length) {
+          showWarning(meta.warnings);
+        } else {
+          hideWarning();
+        }
+      }
+
+      function renderLineChart(dataset) {
+        const ctx = document.getElementById('chartOmzet');
+        const cfg = {
+          type: 'line',
+          data: {
+            labels: dataset.labels || [],
+            datasets: [
+              {
+                label: 'Omzet',
+                data: dataset.values || [],
+                borderColor: '#1864ab',
+                backgroundColor: 'rgba(24, 100, 171, 0.16)',
+                fill: true,
+                borderWidth: 2,
+                tension: 0.25,
+                pointRadius: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: {
+                ticks: {
+                  callback: function (value) {
+                    return compactCurrency(value);
+                  },
+                },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return ' ' + formatCurrency(context.parsed.y || 0);
+                  },
+                },
+              },
+            },
+          },
+        };
+
+        lineChart = mountOrUpdateChart(lineChart, ctx, cfg);
+      }
+
+      function renderBarChart(dataset) {
+        const ctx = document.getElementById('chartProduk');
+        const cfg = {
+          type: 'bar',
+          data: {
+            labels: dataset.labels || [],
+            datasets: [
+              {
+                label: 'Qty Terjual',
+                data: dataset.values || [],
+                borderRadius: 8,
+                backgroundColor: '#2f9e44',
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+              },
+            },
+          },
+        };
+
+        barChart = mountOrUpdateChart(barChart, ctx, cfg);
+      }
+
+      function renderPieChart(dataset) {
+        const ctx = document.getElementById('chartPie');
+        const palette = [
+          '#1c7ed6', '#2b8a3e', '#f08c00', '#d6336c', '#5f3dc4',
+          '#0b7285', '#c92a2a', '#495057', '#e67700', '#2f9e44', '#4263eb'
+        ];
+
+        const cfg = {
+          type: 'pie',
+          data: {
+            labels: dataset.labels || [],
+            datasets: [
+              {
+                data: dataset.values || [],
+                backgroundColor: (dataset.values || []).map(function (_, idx) {
+                  return palette[idx % palette.length];
+                }),
+                borderColor: '#ffffff',
+                borderWidth: 1,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return context.label + ': ' + formatCurrency(context.parsed || 0);
+                  },
+                },
+              },
+            },
+          },
+        };
+
+        pieChart = mountOrUpdateChart(pieChart, ctx, cfg);
+      }
+
+      function renderPelangganTable(rows) {
+        const tbody = document.getElementById('pelangganTbody');
+        const empty = document.getElementById('tableEmpty');
+        tbody.innerHTML = '';
+
+        if (!rows || !rows.length) {
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+
+        rows.forEach(function (row) {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + escapeHtml(row.pelanggan || '-') + '</td>' +
+            '<td class="num">' + formatCurrency(row.belanja || 0) + '</td>' +
+            '<td class="num">' + formatCurrency(row.profit || 0) + '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function mountOrUpdateChart(chart, canvas, config) {
+        if (chart) {
+          chart.data = config.data;
+          chart.options = config.options;
+          chart.update();
+          return chart;
+        }
+
+        return new Chart(canvas, config);
+      }
+
+      function showWarning(messages) {
+        const box = document.getElementById('warningBox');
+        box.style.display = 'block';
+        box.innerHTML = messages.map(function (msg) { return '- ' + escapeHtml(msg); }).join('<br>');
+      }
+
+      function hideWarning() {
+        const box = document.getElementById('warningBox');
+        box.style.display = 'none';
+        box.textContent = '';
+      }
+
+      function setLoading(isLoading) {
+        document.getElementById('loadingFlag').style.display = isLoading ? 'block' : 'none';
+      }
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('id-ID', {
+          style: 'currency',
+          currency: 'IDR',
+          maximumFractionDigits: 0,
+        }).format(Number(value) || 0);
+      }
+
+      function compactCurrency(value) {
+        const number = Number(value) || 0;
+        if (Math.abs(number) >= 1000000000) {
+          return 'Rp' + (number / 1000000000).toFixed(1) + 'M';
+        }
+        if (Math.abs(number) >= 1000000) {
+          return 'Rp' + (number / 1000000).toFixed(1) + 'jt';
+        }
+        if (Math.abs(number) >= 1000) {
+          return 'Rp' + (number / 1000).toFixed(0) + 'rb';
+        }
+        return 'Rp' + Math.round(number);
+      }
+
+      function formatNumber(value) {
+        return new Intl.NumberFormat('id-ID', {
+          maximumFractionDigits: 0,
+        }).format(Number(value) || 0);
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,492 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Form Kasir</title>
+    <style>
+      :root {
+        --bg: #f5f8fc;
+        --panel: #ffffff;
+        --line: #d7e0ec;
+        --text: #1f2937;
+        --sub: #5b6b7f;
+        --brand: #0b7285;
+        --brand-soft: #e3f4f7;
+        --ok: #2b8a3e;
+        --error: #c92a2a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 14px;
+        background: linear-gradient(180deg, #f9fcff 0%, var(--bg) 100%);
+        color: var(--text);
+        font-family: "Segoe UI", Tahoma, sans-serif;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+
+      .sub {
+        margin-top: 4px;
+        color: var(--sub);
+        font-size: 12px;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(90px, 1fr));
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .summary-box {
+        background: var(--brand-soft);
+        border: 1px solid #cae9f0;
+        border-radius: 10px;
+        padding: 8px;
+      }
+
+      .summary-box .k {
+        font-size: 11px;
+        color: #24545e;
+      }
+
+      .summary-box .v {
+        margin-top: 3px;
+        font-size: 16px;
+        font-weight: 700;
+        color: #124652;
+      }
+
+      .form {
+        margin-top: 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      label {
+        font-size: 12px;
+        color: var(--sub);
+        margin-bottom: 4px;
+        display: block;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        padding: 9px 10px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        outline: none;
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px rgba(11, 114, 133, 0.12);
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 78px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .product-meta {
+        border: 1px dashed #cdd8e6;
+        border-radius: 10px;
+        padding: 10px;
+        display: grid;
+        gap: 6px;
+        background: #fbfdff;
+      }
+
+      .meta-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 13px;
+      }
+
+      .meta-label {
+        color: var(--sub);
+      }
+
+      .meta-value {
+        font-weight: 600;
+      }
+
+      .total-box {
+        border: 1px solid #c7e5cf;
+        background: #effaf2;
+        color: #1f7a31;
+        border-radius: 10px;
+        padding: 10px;
+      }
+
+      .total-box .k {
+        font-size: 12px;
+      }
+
+      .total-box .v {
+        margin-top: 3px;
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+
+      .btn {
+        cursor: pointer;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .btn-primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+        font-weight: 600;
+      }
+
+      .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .status {
+        margin-top: 10px;
+        min-height: 18px;
+        font-size: 12px;
+      }
+
+      .status.ok {
+        color: var(--ok);
+      }
+
+      .status.err {
+        color: var(--error);
+      }
+
+      .warn {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #915a00;
+        background: #fff8e1;
+        border: 1px solid #f2d39c;
+        border-radius: 10px;
+        padding: 9px;
+        display: none;
+      }
+
+      @media (max-width: 640px) {
+        .summary {
+          grid-template-columns: 1fr;
+        }
+
+        .grid-2,
+        .actions {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Form Kasir</h1>
+      <div class="sub">Input transaksi ke sheet PENJUALAN, validasi stok dari sheet PRODUK.</div>
+
+      <div class="summary">
+        <div class="summary-box">
+          <div class="k">Transaksi Hari Ini</div>
+          <div class="v" id="sumTrx">0</div>
+        </div>
+        <div class="summary-box">
+          <div class="k">Omzet Hari Ini</div>
+          <div class="v" id="sumOmzet">Rp0</div>
+        </div>
+        <div class="summary-box">
+          <div class="k">Laba Hari Ini</div>
+          <div class="v" id="sumLaba">Rp0</div>
+        </div>
+      </div>
+
+      <div class="form">
+        <div>
+          <label for="customer">Nama Pelanggan</label>
+          <input id="customer" type="text" placeholder="Contoh: Budi" autocomplete="off" />
+        </div>
+
+        <div>
+          <label for="product">Produk (SKU)</label>
+          <select id="product">
+            <option value="">Memuat data produk...</option>
+          </select>
+        </div>
+
+        <div class="product-meta">
+          <div class="meta-row"><span class="meta-label">Nama Produk</span><span class="meta-value" id="metaNama">-</span></div>
+          <div class="meta-row"><span class="meta-label">Kategori</span><span class="meta-value" id="metaKategori">-</span></div>
+          <div class="meta-row"><span class="meta-label">Satuan</span><span class="meta-value" id="metaSatuan">-</span></div>
+          <div class="meta-row"><span class="meta-label">Harga Satuan</span><span class="meta-value" id="metaHarga">Rp0</span></div>
+          <div class="meta-row"><span class="meta-label">Stok Tersedia</span><span class="meta-value" id="metaStok">0</span></div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <label for="qty">Qty</label>
+            <input id="qty" type="number" min="1" step="1" placeholder="0" />
+          </div>
+          <div>
+            <label for="note">Catatan</label>
+            <textarea id="note" placeholder="Opsional"></textarea>
+          </div>
+        </div>
+
+        <div class="total-box">
+          <div class="k">Total Transaksi</div>
+          <div class="v" id="total">Rp0</div>
+        </div>
+
+        <div class="actions">
+          <button id="btnSave" class="btn btn-primary">Simpan Transaksi</button>
+          <button id="btnReload" class="btn" type="button">Reload</button>
+        </div>
+      </div>
+
+      <div class="status" id="status"></div>
+      <div class="warn" id="warn"></div>
+    </div>
+
+    <script>
+      let products = [];
+      let productMap = {};
+
+      function init() {
+        document.getElementById('product').addEventListener('change', onProductChange);
+        document.getElementById('qty').addEventListener('input', updateTotalPreview);
+        document.getElementById('btnSave').addEventListener('click', saveTransaction);
+        document.getElementById('btnReload').addEventListener('click', loadOptions);
+        loadOptions();
+      }
+
+      function loadOptions() {
+        setStatus('Memuat data kasir...', false);
+        setLoading(true);
+
+        google.script.run
+          .withSuccessHandler(function (payload) {
+            setLoading(false);
+            renderOptions(payload || {});
+            setStatus('Data kasir siap digunakan.', false);
+          })
+          .withFailureHandler(function (error) {
+            setLoading(false);
+            setStatus('Gagal memuat data: ' + extractError(error), true);
+          })
+          .getKasirOptions();
+      }
+
+      function renderOptions(payload) {
+        products = payload.products || [];
+        productMap = {};
+        products.forEach(function (p) {
+          productMap[p.sku] = p;
+        });
+
+        renderSummary(payload.summary || {});
+        renderWarning(payload.meta && payload.meta.warnings ? payload.meta.warnings : []);
+
+        const select = document.getElementById('product');
+        select.innerHTML = '';
+
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = products.length ? 'Pilih SKU / Produk' : 'Produk tidak tersedia';
+        select.appendChild(defaultOption);
+
+        products.forEach(function (item) {
+          const opt = document.createElement('option');
+          opt.value = item.sku;
+          opt.textContent = item.sku + ' - ' + item.namaProduk + ' (stok: ' + formatNumber(item.stokTersedia) + ')';
+          select.appendChild(opt);
+        });
+
+        clearProductMeta();
+      }
+
+      function renderSummary(summary) {
+        document.getElementById('sumTrx').textContent = formatNumber(summary.transaksiHariIni || 0);
+        document.getElementById('sumOmzet').textContent = formatCurrency(summary.omzetHariIni || 0);
+        document.getElementById('sumLaba').textContent = formatCurrency(summary.labaHariIni || 0);
+      }
+
+      function renderWarning(warnings) {
+        const box = document.getElementById('warn');
+        if (!warnings || !warnings.length) {
+          box.style.display = 'none';
+          box.textContent = '';
+          return;
+        }
+
+        box.style.display = 'block';
+        box.innerHTML = warnings.map(function (w) { return '- ' + escapeHtml(w); }).join('<br>');
+      }
+
+      function onProductChange() {
+        const sku = document.getElementById('product').value;
+        const item = productMap[sku];
+        if (!item) {
+          clearProductMeta();
+          return;
+        }
+
+        document.getElementById('metaNama').textContent = item.namaProduk || '-';
+        document.getElementById('metaKategori').textContent = item.kategori || '-';
+        document.getElementById('metaSatuan').textContent = item.satuan || '-';
+        document.getElementById('metaHarga').textContent = formatCurrency(item.hargaJual || 0);
+        document.getElementById('metaStok').textContent = formatNumber(item.stokTersedia || 0);
+
+        updateTotalPreview();
+      }
+
+      function clearProductMeta() {
+        document.getElementById('metaNama').textContent = '-';
+        document.getElementById('metaKategori').textContent = '-';
+        document.getElementById('metaSatuan').textContent = '-';
+        document.getElementById('metaHarga').textContent = 'Rp0';
+        document.getElementById('metaStok').textContent = '0';
+        document.getElementById('total').textContent = 'Rp0';
+      }
+
+      function updateTotalPreview() {
+        const sku = document.getElementById('product').value;
+        const item = productMap[sku];
+        const qty = Number(document.getElementById('qty').value || 0);
+
+        if (!item || !qty || qty <= 0) {
+          document.getElementById('total').textContent = 'Rp0';
+          return;
+        }
+
+        const total = (Number(item.hargaJual) || 0) * qty;
+        document.getElementById('total').textContent = formatCurrency(total);
+      }
+
+      function saveTransaction() {
+        const customer = document.getElementById('customer').value.trim();
+        const sku = document.getElementById('product').value;
+        const qty = Number(document.getElementById('qty').value || 0);
+        const note = document.getElementById('note').value.trim();
+
+        if (!customer) {
+          setStatus('Nama pelanggan wajib diisi.', true);
+          return;
+        }
+        if (!sku) {
+          setStatus('Pilih SKU terlebih dahulu.', true);
+          return;
+        }
+        if (!qty || qty <= 0) {
+          setStatus('Qty harus lebih dari 0.', true);
+          return;
+        }
+
+        setStatus('Menyimpan transaksi...', false);
+        setLoading(true);
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            setLoading(false);
+            setStatus((res && res.message) || 'Transaksi berhasil disimpan.', false);
+            document.getElementById('qty').value = '';
+            document.getElementById('note').value = '';
+            updateTotalPreview();
+            loadOptions();
+          })
+          .withFailureHandler(function (error) {
+            setLoading(false);
+            setStatus('Gagal menyimpan: ' + extractError(error), true);
+          })
+          .saveKasirTransaction({
+            customerName: customer,
+            sku: sku,
+            qty: qty,
+            note: note,
+          });
+      }
+
+      function setLoading(loading) {
+        document.getElementById('btnSave').disabled = loading;
+        document.getElementById('btnReload').disabled = loading;
+      }
+
+      function setStatus(message, isError) {
+        const el = document.getElementById('status');
+        el.textContent = message || '';
+        el.className = 'status ' + (isError ? 'err' : 'ok');
+      }
+
+      function extractError(error) {
+        if (!error) {
+          return 'Unknown error';
+        }
+        return error.message || String(error);
+      }
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat('id-ID', {
+          style: 'currency',
+          currency: 'IDR',
+          maximumFractionDigits: 0,
+        }).format(Number(value) || 0);
+      }
+
+      function formatNumber(value) {
+        return new Intl.NumberFormat('id-ID', {
+          maximumFractionDigits: 2,
+        }).format(Number(value) || 0);
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      document.addEventListener('DOMContentLoaded', init);
+    </script>
+  </body>
+</html>
