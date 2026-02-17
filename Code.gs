@@ -105,6 +105,9 @@ const FIELD_ALIASES = {
  * Menu kustom saat spreadsheet dibuka.
  */
 function onOpen() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
   const ui = SpreadsheetApp.getUi();
 
   ui
@@ -112,6 +115,7 @@ function onOpen() {
     .addItem('Buka Kasir (Sidebar)', 'showKasirSidebar')
     .addItem('Buka Kasir (Modal)', 'showKasirModal')
     .addSeparator()
+    .addItem('Buat Data Dummy', 'generateDummyData')
     .addItem('Sinkronkan Stok + Rekap', 'syncRecapAndStock')
     .addItem('Setup Struktur Sheet', 'setupDatabaseSheets')
     .addToUi();
@@ -176,6 +180,9 @@ function showDashboardSidebar() {
  * - ?view=kasir: kasir
  */
 function doGet(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
   const view = safeText_(e && e.parameter && e.parameter.view).toLowerCase();
   const template = view === 'kasir' ? 'Kasir' : 'Dashboard';
 
@@ -229,14 +236,68 @@ function setupDashboardTriggers() {
  */
 function setupDatabaseSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const messages = [];
-
-  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PRODUK, SHEET_HEADERS.PRODUK, messages);
-  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PENJUALAN, SHEET_HEADERS.PENJUALAN, messages);
-  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.REKAP_PRODUK, SHEET_HEADERS.REKAP_PRODUK, messages, true);
-  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.REKAP_PELANGGAN, SHEET_HEADERS.REKAP_PELANGGAN, messages, true);
+  const messages = ensureCoreSheets_(ss, { forceRecapHeaders: true });
 
   SpreadsheetApp.getUi().alert('Setup selesai.\n\n' + (messages.join('\n') || 'Tidak ada perubahan.'));
+}
+
+/**
+ * Mengisi data dummy ke PRODUK dan PENJUALAN lalu rebuild seluruh rekap.
+ * Dipakai untuk testing awal dashboard/kasir.
+ */
+function generateDummyData() {
+  const ui = SpreadsheetApp.getUi();
+  const confirm = ui.alert(
+    'Buat Data Dummy',
+    'Data pada sheet PRODUK, PENJUALAN, REKAP_PRODUK, dan REKAP_PELANGGAN akan diganti data contoh.\n\nLanjutkan?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm !== ui.Button.YES) {
+    ui.alert('Pembuatan data dummy dibatalkan.');
+    return;
+  }
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureCoreSheets_(ss, { forceRecapHeaders: true });
+
+    const produkSheet = findSheetByName_(ss, APP_CONFIG.sheets.PRODUK);
+    const penjualanSheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+
+    const dummyProducts = buildDummyProductCatalog_();
+    const productRows = dummyProducts.map((item) => ([
+      item.sku,
+      item.kategori,
+      item.namaProduk,
+      item.hargaModal,
+      item.satuan,
+      item.hargaJual,
+      item.stokAwal,
+      item.stokAwal,
+      item.hargaModal * item.stokAwal,
+    ]));
+
+    const salesRows = buildDummySalesRows_(dummyProducts);
+
+    overwriteSheetWithRows_(produkSheet, SHEET_HEADERS.PRODUK, productRows);
+    overwriteSheetWithRows_(penjualanSheet, SHEET_HEADERS.PENJUALAN, salesRows);
+
+    const recap = rebuildRecapAndStock_(ss);
+    bumpDashboardVersion_();
+
+    ui.alert(
+      'Data dummy berhasil dibuat.\n\n' +
+        'Produk: ' + productRows.length + '\n' +
+        'Transaksi: ' + salesRows.length + '\n' +
+        'Pelanggan rekap: ' + recap.totalPelanggan
+    );
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -244,6 +305,7 @@ function setupDatabaseSheets() {
  */
 function getKasirOptions() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const autoSetupMessages = ensureCoreSheets_(ss);
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
 
@@ -271,7 +333,7 @@ function getKasirOptions() {
     },
     meta: {
       generatedAt: new Date().toISOString(),
-      warnings: warnings,
+      warnings: autoSetupMessages.concat(warnings),
     },
   };
 }
@@ -286,8 +348,7 @@ function saveKasirTransaction(payload) {
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PRODUK, SHEET_HEADERS.PRODUK, []);
-    ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PENJUALAN, SHEET_HEADERS.PENJUALAN, []);
+    ensureCoreSheets_(ss);
 
     const customerName = safeText_(payload && payload.customerName);
     const skuInput = safeText_(payload && payload.sku);
@@ -388,6 +449,7 @@ function syncRecapAndStock() {
 
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureCoreSheets_(ss);
     const result = rebuildRecapAndStock_(ss);
     bumpDashboardVersion_();
 
@@ -462,6 +524,9 @@ function rebuildRecapAndStock_(ss) {
  * Endpoint data dashboard (pakai cache dokumen agar UI tetap cepat).
  */
 function getDashboardData(forceRefresh) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
   const version = getDashboardVersion_();
   const cacheKey = APP_CONFIG.cachePrefix + version;
   const cache = CacheService.getDocumentCache();
@@ -494,6 +559,8 @@ function getDashboardData(forceRefresh) {
  */
 function buildDashboardPayload_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
   const todayKey = Utilities.formatDate(new Date(), state.timezone, 'yyyy-MM-dd');
@@ -594,6 +661,152 @@ function buildDashboardPayload_() {
       produk: qtyProdukRows,
     },
   };
+}
+
+/**
+ * Auto-create sheet inti bila belum ada.
+ * Secara default hanya membuat sheet/headers yang kosong.
+ * @param {SpreadsheetApp.Spreadsheet} ss
+ * @param {{forceRecapHeaders?: boolean}=} options
+ * @return {string[]} daftar aksi yang dilakukan.
+ */
+function ensureCoreSheets_(ss, options) {
+  const opts = options || {};
+  const messages = [];
+
+  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PRODUK, SHEET_HEADERS.PRODUK, messages);
+  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PENJUALAN, SHEET_HEADERS.PENJUALAN, messages);
+  ensureSheetExistsWithHeader_(
+    ss,
+    APP_CONFIG.sheets.REKAP_PRODUK,
+    SHEET_HEADERS.REKAP_PRODUK,
+    messages,
+    !!opts.forceRecapHeaders
+  );
+  ensureSheetExistsWithHeader_(
+    ss,
+    APP_CONFIG.sheets.REKAP_PELANGGAN,
+    SHEET_HEADERS.REKAP_PELANGGAN,
+    messages,
+    !!opts.forceRecapHeaders
+  );
+
+  return messages;
+}
+
+/**
+ * Dataset master produk dummy.
+ */
+function buildDummyProductCatalog_() {
+  return [
+    { sku: 'BRS-001', kategori: 'Beras', namaProduk: 'Beras Premium 5kg', hargaModal: 62000, satuan: 'sak', hargaJual: 75000, stokAwal: 120 },
+    { sku: 'BRS-002', kategori: 'Beras', namaProduk: 'Beras Medium 5kg', hargaModal: 56000, satuan: 'sak', hargaJual: 69000, stokAwal: 110 },
+    { sku: 'MYK-001', kategori: 'Minyak', namaProduk: 'Minyak Goreng 1L', hargaModal: 14500, satuan: 'pcs', hargaJual: 17500, stokAwal: 240 },
+    { sku: 'GLA-001', kategori: 'Gula', namaProduk: 'Gula Pasir 1kg', hargaModal: 14500, satuan: 'pcs', hargaJual: 18000, stokAwal: 180 },
+    { sku: 'TLP-001', kategori: 'Telur', namaProduk: 'Telur Ayam 1kg', hargaModal: 24000, satuan: 'kg', hargaJual: 29000, stokAwal: 130 },
+    { sku: 'MIE-001', kategori: 'Mie', namaProduk: 'Mie Instan Goreng', hargaModal: 2600, satuan: 'pcs', hargaJual: 3500, stokAwal: 520 },
+    { sku: 'TEH-001', kategori: 'Minuman', namaProduk: 'Teh Celup 25s', hargaModal: 7800, satuan: 'box', hargaJual: 10500, stokAwal: 95 },
+    { sku: 'SUS-001', kategori: 'Susu', namaProduk: 'Susu Kental Manis', hargaModal: 9800, satuan: 'kaleng', hargaJual: 12500, stokAwal: 140 },
+    { sku: 'KCP-001', kategori: 'Bumbu', namaProduk: 'Kecap Manis 600ml', hargaModal: 13500, satuan: 'botol', hargaJual: 17000, stokAwal: 85 },
+    { sku: 'GRM-001', kategori: 'Bumbu', namaProduk: 'Garam 500gr', hargaModal: 3200, satuan: 'pcs', hargaJual: 5000, stokAwal: 210 },
+    { sku: 'KOP-001', kategori: 'Minuman', namaProduk: 'Kopi Bubuk 200gr', hargaModal: 14200, satuan: 'pack', hargaJual: 18500, stokAwal: 120 },
+    { sku: 'SBN-001', kategori: 'Sabun', namaProduk: 'Sabun Mandi Batang', hargaModal: 3400, satuan: 'pcs', hargaJual: 5000, stokAwal: 260 },
+  ];
+}
+
+/**
+ * Membangun transaksi dummy acak dan memastikan stok tidak minus.
+ * @param {Array<Object>} products
+ * @return {Array<Array<*>>}
+ */
+function buildDummySalesRows_(products) {
+  const customers = [
+    'Andi', 'Budi', 'Citra', 'Dewi', 'Eko', 'Fajar', 'Gita', 'Hendra',
+    'Indah', 'Joko', 'Kiki', 'Lina', 'Maya', 'Nanda', 'Putri', 'Rudi',
+    'Sari', 'Tono', 'Wawan', 'Yuni',
+  ];
+  const notes = ['', '', '', 'Langganan', 'COD', 'Antar sore', 'Repeat order'];
+
+  const stockLeft = {};
+  products.forEach((p) => {
+    stockLeft[p.sku] = p.stokAwal;
+  });
+
+  const rows = [];
+  const now = new Date();
+  const startDate = new Date(now);
+  startDate.setDate(startDate.getDate() - 40);
+
+  const targetTransactions = 220;
+  let guard = 0;
+
+  while (rows.length < targetTransactions && guard < 4000) {
+    guard += 1;
+    const availableProducts = products.filter((p) => stockLeft[p.sku] > 0);
+    if (!availableProducts.length) {
+      break;
+    }
+
+    const product = availableProducts[Math.floor(Math.random() * availableProducts.length)];
+    const maxQty = Math.min(4, stockLeft[product.sku]);
+    const qty = Math.max(1, Math.floor(Math.random() * maxQty) + 1);
+    stockLeft[product.sku] -= qty;
+
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + Math.floor(Math.random() * 41));
+    d.setHours(7 + Math.floor(Math.random() * 12), Math.floor(Math.random() * 60), 0, 0);
+
+    const customer = customers[Math.floor(Math.random() * customers.length)];
+    const total = round2_(qty * product.hargaJual);
+    const note = notes[Math.floor(Math.random() * notes.length)];
+
+    rows.push([
+      d,
+      customer,
+      product.sku,
+      product.namaProduk,
+      product.satuan,
+      product.hargaJual,
+      qty,
+      total,
+      note,
+    ]);
+  }
+
+  rows.sort((a, b) => a[0] - b[0]);
+  return rows;
+}
+
+/**
+ * Menimpa isi sheet dengan header + data baru.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {Array<string>} headers
+ * @param {Array<Array<*>>} rows
+ */
+function overwriteSheetWithRows_(sheet, headers, rows) {
+  if (!sheet) {
+    return;
+  }
+
+  if (sheet.getMaxColumns() < headers.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+  }
+
+  const minRows = Math.max(2, rows.length + 1);
+  if (sheet.getMaxRows() < minRows) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), minRows - sheet.getMaxRows());
+  }
+
+  const clearCols = Math.max(sheet.getLastColumn(), headers.length);
+  if (clearCols > 0 && sheet.getMaxRows() > 0) {
+    sheet.getRange(1, 1, sheet.getMaxRows(), clearCols).clearContent();
+  }
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (rows.length) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+  sheet.setFrozenRows(1);
 }
 
 /**
