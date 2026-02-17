@@ -95,7 +95,7 @@
 
       .cards {
         display: grid;
-        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
         gap: 12px;
         margin-bottom: 12px;
       }
@@ -219,10 +219,6 @@
       }
 
       @media (max-width: 980px) {
-        .cards {
-          grid-template-columns: repeat(2, minmax(140px, 1fr));
-        }
-
         .charts {
           grid-template-columns: 1fr;
         }
@@ -249,7 +245,7 @@
       <header class="topbar">
         <div>
           <h1 class="title">Dashboard Penjualan</h1>
-          <p class="subtitle">Sumber: PRODUK, PENJUALAN, REKAP_PRODUK, REKAP_PELANGGAN</p>
+          <p class="subtitle">Sumber: PRODUK, PENJUALAN, MUTASI_STOK, REKAP_PRODUK, REKAP_PELANGGAN</p>
         </div>
         <div class="top-actions">
           <div class="stamp" id="lastUpdated">Belum ada data</div>
@@ -280,6 +276,21 @@
           <div class="value" id="kpiPelanggan">0</div>
           <div class="chip">Pelanggan Aktif</div>
         </article>
+        <article class="card">
+          <div class="label">AOV (Average Order Value)</div>
+          <div class="value" id="kpiAov">Rp0</div>
+          <div class="chip">Per Invoice</div>
+        </article>
+        <article class="card">
+          <div class="label">Produk Paling Untung</div>
+          <div class="value" id="kpiTopProfit">Rp0</div>
+          <div class="chip" id="kpiTopProfitName">-</div>
+        </article>
+        <article class="card">
+          <div class="label">Repeat Customer Rate</div>
+          <div class="value" id="kpiRepeatRate">0%</div>
+          <div class="chip" id="kpiRepeatCount">0 Pelanggan</div>
+        </article>
       </section>
 
       <section class="charts">
@@ -297,6 +308,16 @@
         <article class="panel">
           <h3>Qty Terjual per Produk (Bar Chart)</h3>
           <div class="chart-box"><canvas id="chartProduk"></canvas></div>
+        </article>
+
+        <article class="panel">
+          <h3>Tren Repeat Customer per Hari</h3>
+          <div class="chart-box"><canvas id="chartRepeat"></canvas></div>
+        </article>
+
+        <article class="panel">
+          <h3>Profit per Kategori</h3>
+          <div class="chart-box"><canvas id="chartKategori"></canvas></div>
         </article>
 
         <article class="panel">
@@ -324,6 +345,8 @@
       let lineChart;
       let barChart;
       let pieChart;
+      let repeatChart;
+      let kategoriChart;
 
       const INTERVAL_MS = 30000;
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
@@ -464,6 +487,8 @@
         renderLineChart(payload.charts && payload.charts.omzetHarian ? payload.charts.omzetHarian : { labels: [], values: [] });
         renderBarChart(payload.charts && payload.charts.qtyProduk ? payload.charts.qtyProduk : { labels: [], values: [] });
         renderPieChart(payload.charts && payload.charts.profitPelanggan ? payload.charts.profitPelanggan : { labels: [], values: [] });
+        renderRepeatChart(payload.charts && payload.charts.repeatCustomerTrend ? payload.charts.repeatCustomerTrend : { labels: [], values: [] });
+        renderKategoriChart(payload.charts && payload.charts.profitKategori ? payload.charts.profitKategori : { labels: [], values: [] });
         renderPelangganTable(payload.tables && payload.tables.pelanggan ? payload.tables.pelanggan : []);
       }
 
@@ -472,6 +497,16 @@
         document.getElementById('kpiProfit').textContent = formatCurrency(kpi.totalLabaKotor || 0);
         document.getElementById('kpiTransaksi').textContent = formatNumber(kpi.totalTransaksi || 0);
         document.getElementById('kpiPelanggan').textContent = formatNumber(kpi.totalPelanggan || 0);
+        document.getElementById('kpiAov').textContent = formatCurrency(kpi.aov || 0);
+
+        const topProfit = kpi.produkPalingUntung || {};
+        document.getElementById('kpiTopProfit').textContent = formatCurrency(topProfit.profit || 0);
+        document.getElementById('kpiTopProfitName').textContent =
+          (topProfit.namaProduk || '-') + ((topProfit.sku ? ' (' + topProfit.sku + ')' : ''));
+
+        document.getElementById('kpiRepeatRate').textContent = formatNumber(kpi.repeatCustomerRate || 0) + '%';
+        document.getElementById('kpiRepeatCount').textContent =
+          formatNumber(kpi.repeatCustomerCount || 0) + ' Pelanggan';
       }
 
       function renderMeta(meta) {
@@ -618,6 +653,79 @@
         };
 
         pieChart = mountOrUpdateChart(pieChart, ctx, cfg);
+      }
+
+      function renderRepeatChart(dataset) {
+        const ctx = document.getElementById('chartRepeat');
+        const cfg = {
+          type: 'line',
+          data: {
+            labels: dataset.labels || [],
+            datasets: [
+              {
+                label: 'Transaksi Repeat',
+                data: dataset.values || [],
+                borderColor: '#d9480f',
+                backgroundColor: 'rgba(217, 72, 15, 0.15)',
+                fill: true,
+                borderWidth: 2,
+                tension: 0.25,
+                pointRadius: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } },
+          },
+        };
+
+        repeatChart = mountOrUpdateChart(repeatChart, ctx, cfg);
+      }
+
+      function renderKategoriChart(dataset) {
+        const ctx = document.getElementById('chartKategori');
+        const cfg = {
+          type: 'bar',
+          data: {
+            labels: dataset.labels || [],
+            datasets: [
+              {
+                label: 'Profit',
+                data: dataset.values || [],
+                borderRadius: 8,
+                backgroundColor: '#7048e8',
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return ' ' + formatCurrency(context.parsed.y || 0);
+                  },
+                },
+              },
+            },
+            scales: {
+              y: {
+                ticks: {
+                  callback: function (value) {
+                    return compactCurrency(value);
+                  },
+                },
+              },
+            },
+          },
+        };
+
+        kategoriChart = mountOrUpdateChart(kategoriChart, ctx, cfg);
       }
 
       function renderPelangganTable(rows) {

@@ -20,9 +20,12 @@ const APP_CONFIG = {
   cacheTtlSeconds: 45,
   chartItemLimit: 20,
   pieItemLimit: 10,
+  minMarginPercent: 12,
+  maxAlertItems: 20,
   sheets: {
     PRODUK: 'PRODUK',
     PENJUALAN: 'PENJUALAN',
+    MUTASI_STOK: 'MUTASI_STOK',
     REKAP_PRODUK: 'REKAP_PRODUK',
     REKAP_PELANGGAN: 'REKAP_PELANGGAN',
   },
@@ -39,6 +42,7 @@ const SHEET_HEADERS = {
     'Stok Awal',
     'Stok Akhir',
     'Modal',
+    'Stok Minimum',
   ],
   PENJUALAN: [
     'Tanggal',
@@ -50,6 +54,14 @@ const SHEET_HEADERS = {
     'Harga Satuan (Rp)',
     'Qty',
     'Total (Rp)',
+    'Catatan',
+  ],
+  MUTASI_STOK: [
+    'Tanggal',
+    'Jenis Mutasi',
+    'SKU',
+    'Nama Produk',
+    'Qty (+/-)',
     'Catatan',
   ],
   REKAP_PRODUK: [
@@ -82,10 +94,12 @@ const FIELD_ALIASES = {
   hargaJual: ['perkiraan harga (rp)', 'harga jual (rp)', 'harga jual', 'harga', 'price'],
   stokAwal: ['stok awal', 'stock awal', 'stok masuk'],
   stokAkhir: ['stok akhir', 'stock akhir', 'sisa stok'],
+  stokMinimum: ['stok minimum', 'minimal stok', 'minimum stok', 'min stok', 'reorder point'],
   modal: ['modal', 'nilai modal'],
 
   tanggal: ['tanggal', 'tgl', 'date', 'waktu', 'timestamp'],
   invoice: ['no. invoice', 'no invoice', 'invoice', 'nomor invoice', 'id transaksi'],
+  jenisMutasi: ['jenis mutasi', 'tipe mutasi', 'type mutasi', 'jenis', 'type'],
   pelanggan: ['nama pelanggan', 'pelanggan', 'customer', 'pembeli', 'client'],
   hargaSatuan: ['harga satuan (rp)', 'harga satuan', 'harga', 'price'],
   qty: ['qty', 'jumlah', 'kuantitas', 'quantity'],
@@ -122,6 +136,11 @@ function onOpen() {
     .createMenu(APP_CONFIG.menuKasir)
     .addItem('Buka Kasir (Sidebar)', 'showKasirSidebar')
     .addItem('Buka Kasir (Modal)', 'showKasirModal')
+    .addSeparator()
+    .addItem('Input Stok Masuk', 'inputStockMasuk')
+    .addItem('Input Retur Barang', 'inputStockRetur')
+    .addItem('Input Adjustment Stok', 'inputStockAdjustment')
+    .addItem('Cek Alert Stok Minimum', 'showLowStockAlerts')
     .addSeparator()
     .addItem('Buat Data Dummy', 'generateDummyData')
     .addItem('Sinkronkan Stok + Rekap', 'syncRecapAndStock')
@@ -165,6 +184,101 @@ function showKasirModal() {
 }
 
 /**
+ * Input stok masuk via prompt sederhana.
+ */
+function inputStockMasuk() {
+  promptStockMutationFlow_('MASUK');
+}
+
+/**
+ * Input retur barang (stok bertambah) via prompt sederhana.
+ */
+function inputStockRetur() {
+  promptStockMutationFlow_('RETUR');
+}
+
+/**
+ * Input adjustment stok via prompt sederhana.
+ * Qty boleh positif/negatif.
+ */
+function inputStockAdjustment() {
+  promptStockMutationFlow_('ADJUSTMENT');
+}
+
+/**
+ * Menampilkan daftar produk dengan stok di bawah batas minimum.
+ */
+function showLowStockAlerts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
+  const info = getLowStockAlerts();
+  const ui = SpreadsheetApp.getUi();
+  if (!info.items.length) {
+    ui.alert('Tidak ada produk yang melewati batas stok minimum.');
+    return;
+  }
+
+  const lines = info.items.slice(0, APP_CONFIG.maxAlertItems).map((item, idx) => {
+    return (
+      String(idx + 1) + '. ' + item.sku + ' - ' + item.namaProduk +
+      ' | Stok: ' + formatPlainNumber_(item.stokTersedia) +
+      ' | Minimum: ' + formatPlainNumber_(item.stokMinimum)
+    );
+  });
+
+  ui.alert(
+    'Alert Stok Minimum\n\n' +
+      'Total produk hampir habis: ' + info.items.length + '\n\n' +
+      lines.join('\n')
+  );
+}
+
+/**
+ * Flow input mutasi stok berbasis prompt.
+ */
+function promptStockMutationFlow_(mutationType) {
+  const ui = SpreadsheetApp.getUi();
+
+  const skuPrompt = ui.prompt(
+    'Input ' + normalizeMutationLabel_(mutationType),
+    'Masukkan SKU produk:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (skuPrompt.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const qtyHelp = mutationType === 'ADJUSTMENT'
+    ? 'Masukkan Qty adjustment. Gunakan negatif untuk mengurangi stok, positif untuk menambah.'
+    : 'Masukkan Qty (angka positif).';
+  const qtyPrompt = ui.prompt('Qty', qtyHelp, ui.ButtonSet.OK_CANCEL);
+  if (qtyPrompt.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const notePrompt = ui.prompt('Catatan', 'Catatan transaksi (opsional):', ui.ButtonSet.OK_CANCEL);
+  if (notePrompt.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const result = saveStockMutation({
+    type: mutationType,
+    sku: skuPrompt.getResponseText(),
+    qty: qtyPrompt.getResponseText(),
+    note: notePrompt.getResponseText(),
+  });
+
+  ui.alert(
+    'Mutasi stok tersimpan.\n\n' +
+      'Jenis: ' + normalizeMutationLabel_(result.mutationType) + '\n' +
+      'SKU: ' + result.sku + '\n' +
+      'Qty: ' + formatPlainNumber_(result.qtySigned) + '\n' +
+      'Stok Baru: ' + formatPlainNumber_(result.stokSetelah)
+  );
+}
+
+/**
  * Menampilkan index utama dalam modal.
  */
 function showIndex() {
@@ -199,7 +313,7 @@ function showDashboardSidebar() {
  * - default: index
  * - ?view=kasir: kasir
  * - ?view=dashboard: dashboard
- * - ?action=status|kasir-options|dashboard-data (JSON GET API)
+ * - ?action=status|kasir-options|dashboard-data|low-stock-alerts (JSON GET API)
  */
 function doGet(e) {
   if (isApiRequest_(e)) {
@@ -239,6 +353,8 @@ function doGet(e) {
  * Gunakan query `action`, body JSON text/plain, contoh:
  * POST .../exec?action=save-transaction
  * body: {"customerName":"Budi","sku":"BRS-001","qty":2,"note":""}
+ * POST .../exec?action=save-stock-mutation
+ * body: {"type":"MASUK","sku":"BRS-001","qty":10,"note":"Restok"}
  */
 function doPost(e) {
   return handleApiRequest_(e, 'POST');
@@ -302,6 +418,9 @@ function executeApiAction_(action, method, e) {
     if (action === 'dashboard-data') {
       return getDashboardData(toBoolean_(e && e.parameter && e.parameter.forceRefresh));
     }
+    if (action === 'low-stock-alerts') {
+      return getLowStockAlerts();
+    }
     throw new Error('Action GET tidak dikenal: ' + action);
   }
 
@@ -311,6 +430,9 @@ function executeApiAction_(action, method, e) {
 
     if (action === 'save-transaction' || action === 'save-kasir-transaction') {
       return saveKasirTransaction(payload || {});
+    }
+    if (action === 'save-stock-mutation' || action === 'stock-mutation') {
+      return saveStockMutation(payload || {});
     }
     if (action === 'sync-recap') {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -329,6 +451,7 @@ function executeApiAction_(action, method, e) {
 
       const produkSheet = findSheetByName_(ss, APP_CONFIG.sheets.PRODUK);
       const penjualanSheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+      const mutasiSheet = findSheetByName_(ss, APP_CONFIG.sheets.MUTASI_STOK);
 
       const dummyProducts = buildDummyProductCatalog_();
       const productRows = dummyProducts.map((item) => ([
@@ -341,11 +464,13 @@ function executeApiAction_(action, method, e) {
         item.stokAwal,
         item.stokAwal,
         item.hargaModal * item.stokAwal,
+        item.stokMinimum,
       ]));
       const salesRows = buildDummySalesRows_(dummyProducts);
 
       overwriteSheetWithRows_(produkSheet, SHEET_HEADERS.PRODUK, productRows);
       overwriteSheetWithRows_(penjualanSheet, SHEET_HEADERS.PENJUALAN, salesRows);
+      overwriteSheetWithRows_(mutasiSheet, SHEET_HEADERS.MUTASI_STOK, []);
 
       const recap = rebuildRecapAndStock_(ss);
       bumpDashboardVersion_();
@@ -485,7 +610,7 @@ function generateDummyData() {
   const ui = SpreadsheetApp.getUi();
   const confirm = ui.alert(
     'Buat Data Dummy',
-    'Data pada sheet PRODUK, PENJUALAN, REKAP_PRODUK, dan REKAP_PELANGGAN akan diganti data contoh.\n\nLanjutkan?',
+    'Data pada sheet PRODUK, PENJUALAN, MUTASI_STOK, REKAP_PRODUK, dan REKAP_PELANGGAN akan diganti data contoh.\n\nLanjutkan?',
     ui.ButtonSet.YES_NO
   );
 
@@ -503,6 +628,7 @@ function generateDummyData() {
 
     const produkSheet = findSheetByName_(ss, APP_CONFIG.sheets.PRODUK);
     const penjualanSheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+    const mutasiSheet = findSheetByName_(ss, APP_CONFIG.sheets.MUTASI_STOK);
 
     const dummyProducts = buildDummyProductCatalog_();
     const productRows = dummyProducts.map((item) => ([
@@ -515,12 +641,14 @@ function generateDummyData() {
       item.stokAwal,
       item.stokAwal,
       item.hargaModal * item.stokAwal,
+      item.stokMinimum,
     ]));
 
     const salesRows = buildDummySalesRows_(dummyProducts);
 
     overwriteSheetWithRows_(produkSheet, SHEET_HEADERS.PRODUK, productRows);
     overwriteSheetWithRows_(penjualanSheet, SHEET_HEADERS.PENJUALAN, salesRows);
+    overwriteSheetWithRows_(mutasiSheet, SHEET_HEADERS.MUTASI_STOK, []);
 
     const recap = rebuildRecapAndStock_(ss);
     bumpDashboardVersion_();
@@ -544,6 +672,7 @@ function getKasirOptions() {
   const autoSetupMessages = ensureCoreSheets_(ss);
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
+  const alerts = buildProductAlerts_(state.products);
 
   const products = state.products
     .map((item) => ({
@@ -554,6 +683,7 @@ function getKasirOptions() {
       hargaJual: round2_(item.hargaJual),
       hargaModal: round2_(item.hargaModal),
       stokTersedia: round2_(item.stockCalculated),
+      stokMinimum: round2_(item.stokMinimum),
     }))
     .sort((a, b) => a.namaProduk.localeCompare(b.namaProduk));
 
@@ -569,7 +699,10 @@ function getKasirOptions() {
     },
     meta: {
       generatedAt: new Date().toISOString(),
-      warnings: autoSetupMessages.concat(warnings),
+      warnings: autoSetupMessages.concat(warnings, alerts.lowStockWarnings, alerts.pricingWarnings),
+      lowStockItems: alerts.lowStockItems,
+      pricingAlerts: alerts.pricingItems,
+      minMarginPercent: APP_CONFIG.minMarginPercent,
     },
   };
 }
@@ -686,6 +819,9 @@ function saveKasirTransaction(payload) {
 
     const syncResult = rebuildRecapAndStock_(ss);
     bumpDashboardVersion_();
+    const postWarnings = [];
+    const stateAfter = collectBusinessState_(ss, postWarnings);
+    const alertsAfter = buildProductAlerts_(stateAfter.products);
 
     const totalQty = round2_(validatedItems.reduce((sum, item) => sum + item.qty, 0));
     const totalBelanja = round2_(validatedItems.reduce((sum, item) => sum + item.total, 0));
@@ -710,7 +846,7 @@ function saveKasirTransaction(payload) {
         })),
       },
       recap: syncResult,
-      warnings: warnings,
+      warnings: warnings.concat(postWarnings, alertsAfter.lowStockWarnings, alertsAfter.pricingWarnings),
     };
   } finally {
     lock.releaseLock();
@@ -733,7 +869,9 @@ function syncRecapAndStock() {
       'Sinkronisasi selesai.\n\n' +
         'Produk: ' + result.totalProduk + '\n' +
         'Pelanggan: ' + result.totalPelanggan + '\n' +
-        'Transaksi: ' + result.totalTransaksi
+        'Transaksi: ' + result.totalTransaksi + '\n' +
+        'Mutasi Stok: ' + (result.totalMutasi || 0) + '\n' +
+        'Alert Stok Minimum: ' + (result.totalAlertStokMinimum || 0)
     );
 
     return result;
@@ -743,11 +881,133 @@ function syncRecapAndStock() {
 }
 
 /**
+ * Simpan mutasi stok:
+ * - MASUK: tambah stok
+ * - RETUR: tambah stok
+ * - ADJUSTMENT: tambah/kurang stok (qty bisa +/-)
+ * @param {{type:string,sku:string,qty:number|string,note?:string}} payload
+ */
+function saveStockMutation(payload) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureCoreSheets_(ss);
+
+    const mutationType = normalizeMutationType_(payload && payload.type);
+    const skuInput = safeText_(payload && payload.sku);
+    const qtyRaw = toNumber_(payload && payload.qty);
+    const note = safeText_(payload && payload.note);
+
+    if (['MASUK', 'RETUR', 'ADJUSTMENT'].indexOf(mutationType) === -1) {
+      throw new Error('Tipe mutasi tidak valid. Gunakan MASUK, RETUR, atau ADJUSTMENT.');
+    }
+
+    if (!skuInput) {
+      throw new Error('SKU wajib diisi.');
+    }
+
+    let qtySigned = 0;
+    if (mutationType === 'ADJUSTMENT') {
+      qtySigned = round2_(qtyRaw);
+      if (!qtySigned) {
+        throw new Error('Qty adjustment tidak boleh 0.');
+      }
+    } else {
+      qtySigned = round2_(Math.abs(qtyRaw));
+      if (!qtySigned) {
+        throw new Error('Qty harus lebih dari 0.');
+      }
+    }
+
+    const warnings = [];
+    const stateBefore = collectBusinessState_(ss, warnings);
+    const skuKey = normalizeSku_(skuInput);
+    const product = stateBefore.productsBySku[skuKey];
+    if (!product) {
+      throw new Error('SKU tidak ditemukan pada sheet PRODUK.');
+    }
+
+    const stokSebelum = round2_(product.stockCalculated);
+    const stokSetelah = round2_(stokSebelum + qtySigned);
+    if (stokSetelah < 0) {
+      throw new Error(
+        'Mutasi menyebabkan stok minus. Stok saat ini ' + product.namaProduk + ': ' + formatPlainNumber_(stokSebelum)
+      );
+    }
+
+    const mutCtx = getSheetContext_(ss, APP_CONFIG.sheets.MUTASI_STOK, warnings);
+    if (!mutCtx.sheet) {
+      throw new Error('Sheet MUTASI_STOK tidak ditemukan.');
+    }
+
+    const mutCols = resolveColumns_(mutCtx.headers, {
+      tanggal: FIELD_ALIASES.tanggal,
+      jenisMutasi: FIELD_ALIASES.jenisMutasi,
+      sku: FIELD_ALIASES.sku,
+      namaProduk: FIELD_ALIASES.namaProduk,
+      qty: FIELD_ALIASES.qty,
+      catatan: FIELD_ALIASES.catatan,
+    });
+
+    ensureRequiredColumns_(mutCols, ['tanggal', 'jenisMutasi', 'sku', 'qty'], APP_CONFIG.sheets.MUTASI_STOK);
+
+    const rowLength = Math.max(mutCtx.headers.length, SHEET_HEADERS.MUTASI_STOK.length);
+    const newRow = new Array(rowLength).fill('');
+    assignRowValue_(newRow, mutCols.tanggal, new Date());
+    assignRowValue_(newRow, mutCols.jenisMutasi, mutationType);
+    assignRowValue_(newRow, mutCols.sku, product.sku);
+    assignRowValue_(newRow, mutCols.namaProduk, product.namaProduk);
+    assignRowValue_(newRow, mutCols.qty, qtySigned);
+    assignRowValue_(newRow, mutCols.catatan, note);
+    mutCtx.sheet.appendRow(newRow);
+
+    const recap = rebuildRecapAndStock_(ss);
+    bumpDashboardVersion_();
+
+    return {
+      success: true,
+      mutationType: mutationType,
+      sku: product.sku,
+      namaProduk: product.namaProduk,
+      qtySigned: qtySigned,
+      stokSebelum: stokSebelum,
+      stokSetelah: stokSetelah,
+      recap: recap,
+      warnings: warnings.concat(recap.warnings || []),
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Ambil daftar produk yang stoknya di bawah / sama dengan stok minimum.
+ */
+function getLowStockAlerts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
+  const warnings = [];
+  const state = collectBusinessState_(ss, warnings);
+  const alerts = buildProductAlerts_(state.products);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    total: alerts.lowStockItems.length,
+    items: alerts.lowStockItems,
+    warnings: warnings.concat(alerts.lowStockWarnings, alerts.pricingWarnings),
+  };
+}
+
+/**
  * Rebuild stok + rekap berdasarkan data PRODUK & PENJUALAN.
  */
 function rebuildRecapAndStock_(ss) {
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
+  const alerts = buildProductAlerts_(state.products);
 
   syncProductStockColumns_(state);
 
@@ -792,7 +1052,9 @@ function rebuildRecapAndStock_(ss) {
     totalProduk: rekapProdukRows.length,
     totalPelanggan: pelangganRows.length,
     totalTransaksi: countDistinctTransactions_(state.sales),
-    warnings: warnings,
+    totalMutasi: state.mutations.length,
+    totalAlertStokMinimum: alerts.lowStockItems.length,
+    warnings: warnings.concat(alerts.lowStockWarnings, alerts.pricingWarnings),
   };
 }
 
@@ -839,12 +1101,16 @@ function buildDashboardPayload_() {
 
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
+  const alerts = buildProductAlerts_(state.products);
   const todayKey = Utilities.formatDate(new Date(), state.timezone, 'yyyy-MM-dd');
 
   const omzetPerHari = {};
   const qtyPerProduk = {};
+  const profitBySku = {};
+  const profitByKategori = {};
   const pelangganMap = {};
   const pelangganTransaksiSet = {};
+  const transactionMap = {};
 
   let omzetHariIni = 0;
   let totalLabaKotor = 0;
@@ -858,6 +1124,12 @@ function buildDashboardPayload_() {
     }
 
     qtyPerProduk[row.namaProduk] = (qtyPerProduk[row.namaProduk] || 0) + row.qty;
+    profitBySku[row.skuKey] = round2_((profitBySku[row.skuKey] || 0) + row.profit);
+
+    const kategori = safeText_(
+      (state.productsBySku[row.skuKey] && state.productsBySku[row.skuKey].kategori) || 'Tanpa Kategori'
+    ) || 'Tanpa Kategori';
+    profitByKategori[kategori] = round2_((profitByKategori[kategori] || 0) + row.profit);
 
     if (!pelangganMap[row.pelanggan]) {
       pelangganMap[row.pelanggan] = { pelanggan: row.pelanggan, belanja: 0, profit: 0, qty: 0, transaksi: 0 };
@@ -875,8 +1147,56 @@ function buildDashboardPayload_() {
       pelangganMap[row.pelanggan].transaksi += 1;
     }
 
+    if (!transactionMap[transaksiKey]) {
+      transactionMap[transaksiKey] = {
+        key: transaksiKey,
+        dateKey: row.dateKey,
+        pelanggan: row.pelanggan,
+        total: 0,
+        profit: 0,
+        qty: 0,
+      };
+    }
+    transactionMap[transaksiKey].total = round2_(transactionMap[transaksiKey].total + row.total);
+    transactionMap[transaksiKey].profit = round2_(transactionMap[transaksiKey].profit + row.profit);
+    transactionMap[transaksiKey].qty = round2_(transactionMap[transaksiKey].qty + row.qty);
+
     totalLabaKotor += row.profit;
   });
+
+  const transactions = Object.keys(transactionMap).map((key) => transactionMap[key]);
+  const totalTransaksi = transactions.length;
+  const totalOmzet = round2_(transactions.reduce((sum, trx) => sum + trx.total, 0));
+  const aov = totalTransaksi ? round2_(totalOmzet / totalTransaksi) : 0;
+
+  const customerTransactionCount = {};
+  transactions.forEach((trx) => {
+    customerTransactionCount[trx.pelanggan] = (customerTransactionCount[trx.pelanggan] || 0) + 1;
+  });
+  const totalCustomerForRepeat = Object.keys(customerTransactionCount).length;
+  const repeatCustomerCount = Object.keys(customerTransactionCount).filter(
+    (name) => customerTransactionCount[name] >= 2
+  ).length;
+  const repeatCustomerRate = totalCustomerForRepeat
+    ? round2_((repeatCustomerCount / totalCustomerForRepeat) * 100)
+    : 0;
+
+  const repeatTrendMap = {};
+  transactions.forEach((trx) => {
+    if (!trx.dateKey) {
+      return;
+    }
+    if ((customerTransactionCount[trx.pelanggan] || 0) >= 2) {
+      repeatTrendMap[trx.dateKey] = (repeatTrendMap[trx.dateKey] || 0) + 1;
+    }
+  });
+  const repeatTrendRows = Object.keys(repeatTrendMap)
+    .sort()
+    .map((dateKey) => ({
+      dateKey: dateKey,
+      label: formatDateKey_(dateKey, state.timezone),
+      repeatTransaksi: round2_(repeatTrendMap[dateKey]),
+    }));
 
   const omzetHarianRows = Object.keys(omzetPerHari)
     .sort()
@@ -890,6 +1210,30 @@ function buildDashboardPayload_() {
     .map((name) => ({ name: name, qty: round2_(qtyPerProduk[name]) }))
     .filter((row) => row.qty !== 0)
     .sort((a, b) => b.qty - a.qty)
+    .slice(0, APP_CONFIG.chartItemLimit);
+
+  const produkProfitRows = Object.keys(profitBySku)
+    .map((skuKey) => {
+      const product = state.productsBySku[skuKey];
+      return {
+        sku: product ? product.sku : skuKey,
+        namaProduk: product ? product.namaProduk : skuKey,
+        kategori: product ? product.kategori : '-',
+        profit: round2_(profitBySku[skuKey]),
+      };
+    })
+    .sort((a, b) => b.profit - a.profit);
+
+  const topProfitProduct = produkProfitRows.length
+    ? produkProfitRows[0]
+    : { sku: '', namaProduk: '-', kategori: '-', profit: 0 };
+
+  const profitKategoriRows = Object.keys(profitByKategori)
+    .map((kategori) => ({
+      kategori: kategori,
+      profit: round2_(profitByKategori[kategori]),
+    }))
+    .sort((a, b) => b.profit - a.profit)
     .slice(0, APP_CONFIG.chartItemLimit);
 
   const pelangganRows = Object.keys(pelangganMap)
@@ -912,19 +1256,32 @@ function buildDashboardPayload_() {
     meta: {
       generatedAt: new Date().toISOString(),
       timezone: state.timezone,
-      warnings: warnings,
       sourceSheetStatus: {
         PRODUK: !!state.productsContext.sheet,
         PENJUALAN: !!state.salesContext.sheet,
+        MUTASI_STOK: !!state.mutationContext.sheet,
         REKAP_PRODUK: !!findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PRODUK),
         REKAP_PELANGGAN: !!findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PELANGGAN),
       },
+      warnings: warnings.concat(alerts.lowStockWarnings, alerts.pricingWarnings),
+      lowStockItems: alerts.lowStockItems,
+      pricingAlerts: alerts.pricingItems,
+      minMarginPercent: APP_CONFIG.minMarginPercent,
     },
     kpi: {
       omzetHariIni: round2_(omzetHariIni),
       totalLabaKotor: round2_(totalLabaKotor),
-      totalTransaksi: countDistinctTransactions_(state.sales),
+      totalTransaksi: totalTransaksi,
       totalPelanggan: pelangganRows.length,
+      aov: aov,
+      repeatCustomerCount: repeatCustomerCount,
+      repeatCustomerRate: repeatCustomerRate,
+      produkPalingUntung: {
+        sku: topProfitProduct.sku,
+        namaProduk: topProfitProduct.namaProduk,
+        kategori: topProfitProduct.kategori,
+        profit: round2_(topProfitProduct.profit),
+      },
     },
     charts: {
       omzetHarian: {
@@ -939,10 +1296,20 @@ function buildDashboardPayload_() {
         labels: pieRows.map((row) => row.pelanggan),
         values: pieRows.map((row) => row.profit),
       },
+      repeatCustomerTrend: {
+        labels: repeatTrendRows.map((row) => row.label),
+        values: repeatTrendRows.map((row) => row.repeatTransaksi),
+      },
+      profitKategori: {
+        labels: profitKategoriRows.map((row) => row.kategori),
+        values: profitKategoriRows.map((row) => row.profit),
+      },
     },
     tables: {
       pelanggan: pelangganRows.slice(0, 100),
       produk: qtyProdukRows,
+      produkProfit: produkProfitRows.slice(0, 100),
+      profitKategori: profitKategoriRows,
     },
   };
 }
@@ -959,8 +1326,10 @@ function ensureCoreSheets_(ss, options) {
   const messages = [];
 
   ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PRODUK, SHEET_HEADERS.PRODUK, messages);
+  ensureProdukMinimumStockColumn_(ss, messages);
   ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PENJUALAN, SHEET_HEADERS.PENJUALAN, messages);
   ensurePenjualanInvoiceColumn_(ss, messages);
+  ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.MUTASI_STOK, SHEET_HEADERS.MUTASI_STOK, messages);
   ensureSheetExistsWithHeader_(
     ss,
     APP_CONFIG.sheets.REKAP_PRODUK,
@@ -977,6 +1346,31 @@ function ensureCoreSheets_(ss, options) {
   );
 
   return messages;
+}
+
+/**
+ * Pastikan sheet PRODUK memiliki kolom stok minimum.
+ */
+function ensureProdukMinimumStockColumn_(ss, messages) {
+  const sheet = findSheetByName_(ss, APP_CONFIG.sheets.PRODUK);
+  if (!sheet) {
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const readCols = Math.max(lastCol, 1);
+  const headers = sheet.getRange(1, 1, 1, readCols).getValues()[0].map((cell) => safeText_(cell));
+  const cols = resolveColumns_(headers, { stokMinimum: FIELD_ALIASES.stokMinimum });
+  if (cols.stokMinimum > -1) {
+    return;
+  }
+
+  const targetCol = readCols + 1;
+  if (sheet.getMaxColumns() < targetCol) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), targetCol - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, targetCol).setValue(SHEET_HEADERS.PRODUK[SHEET_HEADERS.PRODUK.length - 1]);
+  messages.push('Menambahkan kolom stok minimum pada sheet ' + APP_CONFIG.sheets.PRODUK);
 }
 
 /**
@@ -1015,9 +1409,11 @@ function getAppConnectionStatus() {
   const autoSetupMessages = ensureCoreSheets_(ss);
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
+  const alerts = buildProductAlerts_(state.products);
 
   const rekapProdukSheet = findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PRODUK);
   const rekapPelangganSheet = findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PELANGGAN);
+  const mutasiSheet = findSheetByName_(ss, APP_CONFIG.sheets.MUTASI_STOK);
 
   return {
     meta: {
@@ -1025,11 +1421,12 @@ function getAppConnectionStatus() {
       spreadsheetId: ss.getId(),
       generatedAt: new Date().toISOString(),
       timezone: ss.getSpreadsheetTimeZone() || Session.getScriptTimeZone(),
-      warnings: autoSetupMessages.concat(warnings),
+      warnings: autoSetupMessages.concat(warnings, alerts.lowStockWarnings, alerts.pricingWarnings),
     },
     sheets: {
       PRODUK: buildSheetStatusInfo_(state.productsContext.sheet),
       PENJUALAN: buildSheetStatusInfo_(state.salesContext.sheet),
+      MUTASI_STOK: buildSheetStatusInfo_(mutasiSheet),
       REKAP_PRODUK: buildSheetStatusInfo_(rekapProdukSheet),
       REKAP_PELANGGAN: buildSheetStatusInfo_(rekapPelangganSheet),
     },
@@ -1037,6 +1434,7 @@ function getAppConnectionStatus() {
       totalProduk: state.products.length,
       totalTransaksi: countDistinctTransactions_(state.sales),
       totalPelanggan: Object.keys(state.customerAgg).length,
+      totalAlertStokMinimum: alerts.lowStockItems.length,
     },
   };
 }
@@ -1074,18 +1472,18 @@ function buildSheetStatusInfo_(sheet) {
  */
 function buildDummyProductCatalog_() {
   return [
-    { sku: 'BRS-001', kategori: 'Beras', namaProduk: 'Beras Premium 5kg', hargaModal: 62000, satuan: 'sak', hargaJual: 75000, stokAwal: 120 },
-    { sku: 'BRS-002', kategori: 'Beras', namaProduk: 'Beras Medium 5kg', hargaModal: 56000, satuan: 'sak', hargaJual: 69000, stokAwal: 110 },
-    { sku: 'MYK-001', kategori: 'Minyak', namaProduk: 'Minyak Goreng 1L', hargaModal: 14500, satuan: 'pcs', hargaJual: 17500, stokAwal: 240 },
-    { sku: 'GLA-001', kategori: 'Gula', namaProduk: 'Gula Pasir 1kg', hargaModal: 14500, satuan: 'pcs', hargaJual: 18000, stokAwal: 180 },
-    { sku: 'TLP-001', kategori: 'Telur', namaProduk: 'Telur Ayam 1kg', hargaModal: 24000, satuan: 'kg', hargaJual: 29000, stokAwal: 130 },
-    { sku: 'MIE-001', kategori: 'Mie', namaProduk: 'Mie Instan Goreng', hargaModal: 2600, satuan: 'pcs', hargaJual: 3500, stokAwal: 520 },
-    { sku: 'TEH-001', kategori: 'Minuman', namaProduk: 'Teh Celup 25s', hargaModal: 7800, satuan: 'box', hargaJual: 10500, stokAwal: 95 },
-    { sku: 'SUS-001', kategori: 'Susu', namaProduk: 'Susu Kental Manis', hargaModal: 9800, satuan: 'kaleng', hargaJual: 12500, stokAwal: 140 },
-    { sku: 'KCP-001', kategori: 'Bumbu', namaProduk: 'Kecap Manis 600ml', hargaModal: 13500, satuan: 'botol', hargaJual: 17000, stokAwal: 85 },
-    { sku: 'GRM-001', kategori: 'Bumbu', namaProduk: 'Garam 500gr', hargaModal: 3200, satuan: 'pcs', hargaJual: 5000, stokAwal: 210 },
-    { sku: 'KOP-001', kategori: 'Minuman', namaProduk: 'Kopi Bubuk 200gr', hargaModal: 14200, satuan: 'pack', hargaJual: 18500, stokAwal: 120 },
-    { sku: 'SBN-001', kategori: 'Sabun', namaProduk: 'Sabun Mandi Batang', hargaModal: 3400, satuan: 'pcs', hargaJual: 5000, stokAwal: 260 },
+    { sku: 'BRS-001', kategori: 'Beras', namaProduk: 'Beras Premium 5kg', hargaModal: 62000, satuan: 'sak', hargaJual: 75000, stokAwal: 120, stokMinimum: 30 },
+    { sku: 'BRS-002', kategori: 'Beras', namaProduk: 'Beras Medium 5kg', hargaModal: 56000, satuan: 'sak', hargaJual: 69000, stokAwal: 110, stokMinimum: 28 },
+    { sku: 'MYK-001', kategori: 'Minyak', namaProduk: 'Minyak Goreng 1L', hargaModal: 14500, satuan: 'pcs', hargaJual: 17500, stokAwal: 240, stokMinimum: 60 },
+    { sku: 'GLA-001', kategori: 'Gula', namaProduk: 'Gula Pasir 1kg', hargaModal: 14500, satuan: 'pcs', hargaJual: 18000, stokAwal: 180, stokMinimum: 45 },
+    { sku: 'TLP-001', kategori: 'Telur', namaProduk: 'Telur Ayam 1kg', hargaModal: 24000, satuan: 'kg', hargaJual: 29000, stokAwal: 130, stokMinimum: 35 },
+    { sku: 'MIE-001', kategori: 'Mie', namaProduk: 'Mie Instan Goreng', hargaModal: 2600, satuan: 'pcs', hargaJual: 3500, stokAwal: 520, stokMinimum: 120 },
+    { sku: 'TEH-001', kategori: 'Minuman', namaProduk: 'Teh Celup 25s', hargaModal: 7800, satuan: 'box', hargaJual: 10500, stokAwal: 95, stokMinimum: 20 },
+    { sku: 'SUS-001', kategori: 'Susu', namaProduk: 'Susu Kental Manis', hargaModal: 9800, satuan: 'kaleng', hargaJual: 12500, stokAwal: 140, stokMinimum: 30 },
+    { sku: 'KCP-001', kategori: 'Bumbu', namaProduk: 'Kecap Manis 600ml', hargaModal: 13500, satuan: 'botol', hargaJual: 17000, stokAwal: 85, stokMinimum: 22 },
+    { sku: 'GRM-001', kategori: 'Bumbu', namaProduk: 'Garam 500gr', hargaModal: 3200, satuan: 'pcs', hargaJual: 5000, stokAwal: 210, stokMinimum: 55 },
+    { sku: 'KOP-001', kategori: 'Minuman', namaProduk: 'Kopi Bubuk 200gr', hargaModal: 14200, satuan: 'pack', hargaJual: 18500, stokAwal: 120, stokMinimum: 30 },
+    { sku: 'SBN-001', kategori: 'Sabun', namaProduk: 'Sabun Mandi Batang', hargaModal: 3400, satuan: 'pcs', hargaJual: 5000, stokAwal: 260, stokMinimum: 65 },
   ];
 }
 
@@ -1196,16 +1594,23 @@ function collectBusinessState_(ss, warnings) {
 
   const productsContext = getSheetContext_(ss, APP_CONFIG.sheets.PRODUK, warnings);
   const salesContext = getSheetContext_(ss, APP_CONFIG.sheets.PENJUALAN, warnings);
+  const mutationContext = getSheetContext_(ss, APP_CONFIG.sheets.MUTASI_STOK, warnings);
 
   const productsInfo = parseProducts_(productsContext, warnings);
   const sales = parseSales_(salesContext, productsInfo.bySku, timezone, warnings);
+  const mutations = parseStockMutations_(mutationContext, productsInfo.bySku, warnings);
 
   const soldBySku = {};
+  const mutationBySku = {};
   const customerAgg = {};
   const customerTransactionSet = {};
 
+  mutations.forEach((row) => {
+    mutationBySku[row.skuKey] = round2_((mutationBySku[row.skuKey] || 0) + row.qtySigned);
+  });
+
   sales.forEach((row) => {
-    soldBySku[row.skuKey] = (soldBySku[row.skuKey] || 0) + row.qty;
+    soldBySku[row.skuKey] = round2_((soldBySku[row.skuKey] || 0) + row.qty);
 
     if (!customerAgg[row.pelanggan]) {
       customerAgg[row.pelanggan] = {
@@ -1233,18 +1638,22 @@ function collectBusinessState_(ss, warnings) {
 
   productsInfo.rows.forEach((item) => {
     item.qtySold = round2_(soldBySku[item.skuKey] || 0);
-    item.stockCalculated = round2_(item.stokAwal - item.qtySold);
+    item.qtyMutation = round2_(mutationBySku[item.skuKey] || 0);
+    item.stockCalculated = round2_(item.stokAwal + item.qtyMutation - item.qtySold);
   });
 
   return {
     timezone: timezone,
     productsContext: productsContext,
     salesContext: salesContext,
+    mutationContext: mutationContext,
     productColumns: productsInfo.columns,
     products: productsInfo.rows,
     productsBySku: productsInfo.bySku,
     sales: sales,
+    mutations: mutations,
     soldBySku: soldBySku,
+    mutationBySku: mutationBySku,
     customerAgg: customerAgg,
   };
 }
@@ -1273,6 +1682,7 @@ function parseProducts_(context, warnings) {
     stokAwal: FIELD_ALIASES.stokAwal,
     stokAkhir: FIELD_ALIASES.stokAkhir,
     modal: FIELD_ALIASES.modal,
+    stokMinimum: FIELD_ALIASES.stokMinimum,
   });
 
   if (columns.sku < 0) {
@@ -1298,8 +1708,10 @@ function parseProducts_(context, warnings) {
       hargaJual: round2_(toNumber_(raw[columns.hargaJual])),
       stokAwal: round2_(toNumber_(raw[columns.stokAwal])),
       stokAkhirInput: round2_(toNumber_(raw[columns.stokAkhir])),
+      stokMinimum: round2_(toNumber_(raw[columns.stokMinimum])),
       modal: round2_(toNumber_(raw[columns.modal])),
       qtySold: 0,
+      qtyMutation: 0,
       stockCalculated: 0,
     };
 
@@ -1402,6 +1814,73 @@ function parseSales_(context, productsBySku, timezone, warnings) {
 }
 
 /**
+ * Parsing mutasi stok (stok masuk/retur/adjustment).
+ */
+function parseStockMutations_(context, productsBySku, warnings) {
+  const result = [];
+
+  if (!context.sheet) {
+    return result;
+  }
+
+  const columns = resolveColumns_(context.headers, {
+    tanggal: FIELD_ALIASES.tanggal,
+    jenisMutasi: FIELD_ALIASES.jenisMutasi,
+    sku: FIELD_ALIASES.sku,
+    namaProduk: FIELD_ALIASES.namaProduk,
+    qty: FIELD_ALIASES.qty,
+    catatan: FIELD_ALIASES.catatan,
+  });
+
+  if (columns.sku < 0) {
+    warnings.push('Kolom SKU pada sheet MUTASI_STOK tidak ditemukan.');
+  }
+  if (columns.qty < 0) {
+    warnings.push('Kolom Qty pada sheet MUTASI_STOK tidak ditemukan.');
+  }
+  if (columns.jenisMutasi < 0) {
+    warnings.push('Kolom Jenis Mutasi pada sheet MUTASI_STOK tidak ditemukan.');
+  }
+
+  context.rows.forEach((item) => {
+    const raw = item.values;
+    const skuRaw = safeText_(raw[columns.sku]);
+    if (!skuRaw) {
+      return;
+    }
+
+    const qtyRaw = round2_(toNumber_(raw[columns.qty]));
+    if (!qtyRaw) {
+      return;
+    }
+
+    const type = normalizeMutationType_(raw[columns.jenisMutasi]);
+    let qtySigned = qtyRaw;
+    if (type === 'MASUK' || type === 'RETUR') {
+      qtySigned = round2_(Math.abs(qtyRaw));
+    } else if (type === 'ADJUSTMENT') {
+      qtySigned = round2_(qtyRaw);
+    }
+
+    const skuKey = normalizeSku_(skuRaw);
+    const product = productsBySku[skuKey] || null;
+    const namaProduk = safeText_(raw[columns.namaProduk]) || (product ? product.namaProduk : skuRaw);
+
+    result.push({
+      rowNumber: item.rowNumber,
+      type: type,
+      sku: skuRaw,
+      skuKey: skuKey,
+      namaProduk: namaProduk,
+      qtySigned: qtySigned,
+      catatan: safeText_(raw[columns.catatan]),
+    });
+  });
+
+  return result;
+}
+
+/**
  * Update kolom Stok Akhir + Modal pada sheet PRODUK.
  */
 function syncProductStockColumns_(state) {
@@ -1431,9 +1910,10 @@ function syncProductStockColumns_(state) {
     const skuKey = normalizeSku_(sku);
     const stokAwal = round2_(toNumber_(row[cols.stokAwal]));
     const hargaModal = round2_(toNumber_(row[cols.hargaModal]));
+    const mutasiQty = round2_(state.mutationBySku[skuKey] || 0);
     const soldQty = round2_(state.soldBySku[skuKey] || 0);
 
-    const stokAkhir = round2_(stokAwal - soldQty);
+    const stokAkhir = round2_(stokAwal + mutasiQty - soldQty);
     const modal = round2_(stokAwal * hargaModal);
 
     stockValues.push([stokAkhir]);
@@ -1670,6 +2150,121 @@ function normalizeHeader_(value) {
  */
 function normalizeSku_(value) {
   return safeText_(value).toUpperCase();
+}
+
+/**
+ * Normalisasi tipe mutasi stok.
+ */
+function normalizeMutationType_(value) {
+  const text = safeText_(value).toUpperCase();
+  if (!text) {
+    return 'ADJUSTMENT';
+  }
+  if (text.indexOf('RETUR') > -1) {
+    return 'RETUR';
+  }
+  if (text.indexOf('MASUK') > -1 || text === 'IN') {
+    return 'MASUK';
+  }
+  if (text.indexOf('ADJ') > -1 || text.indexOf('SESUAI') > -1 || text.indexOf('PENYESUAIAN') > -1) {
+    return 'ADJUSTMENT';
+  }
+  return text;
+}
+
+/**
+ * Label ramah untuk tipe mutasi.
+ */
+function normalizeMutationLabel_(value) {
+  const type = normalizeMutationType_(value);
+  if (type === 'MASUK') {
+    return 'Stok Masuk';
+  }
+  if (type === 'RETUR') {
+    return 'Retur';
+  }
+  if (type === 'ADJUSTMENT') {
+    return 'Adjustment';
+  }
+  return type;
+}
+
+/**
+ * Hitung persentase margin kotor.
+ */
+function calcMarginPercent_(hargaJual, hargaModal) {
+  const jual = round2_(toNumber_(hargaJual));
+  const modal = round2_(toNumber_(hargaModal));
+  if (!jual) {
+    return 0;
+  }
+  return round2_(((jual - modal) / jual) * 100);
+}
+
+/**
+ * Kumpulkan alert stok minimum dan warning harga/margin.
+ */
+function buildProductAlerts_(products) {
+  const lowStockItems = (products || [])
+    .filter((item) => item && item.stokMinimum > 0 && item.stockCalculated <= item.stokMinimum)
+    .map((item) => ({
+      sku: item.sku,
+      namaProduk: item.namaProduk,
+      kategori: item.kategori,
+      stokTersedia: round2_(item.stockCalculated),
+      stokMinimum: round2_(item.stokMinimum),
+    }))
+    .sort((a, b) => a.stokTersedia - b.stokTersedia);
+
+  const pricingItems = (products || [])
+    .map((item) => {
+      const marginPercent = calcMarginPercent_(item.hargaJual, item.hargaModal);
+      const belowCost = round2_(item.hargaJual) < round2_(item.hargaModal);
+      const lowMargin = !belowCost && marginPercent < APP_CONFIG.minMarginPercent;
+      if (!belowCost && !lowMargin) {
+        return null;
+      }
+
+      return {
+        sku: item.sku,
+        namaProduk: item.namaProduk,
+        hargaModal: round2_(item.hargaModal),
+        hargaJual: round2_(item.hargaJual),
+        marginPercent: marginPercent,
+        type: belowCost ? 'below-cost' : 'low-margin',
+      };
+    })
+    .filter((item) => !!item)
+    .sort((a, b) => a.marginPercent - b.marginPercent);
+
+  const lowStockWarnings = lowStockItems.slice(0, APP_CONFIG.maxAlertItems).map((item) => {
+    return (
+      'Stok minimum terlewati: ' + item.sku + ' - ' + item.namaProduk +
+      ' (Stok ' + formatPlainNumber_(item.stokTersedia) +
+      ' / Min ' + formatPlainNumber_(item.stokMinimum) + ')'
+    );
+  });
+
+  const pricingWarnings = pricingItems.slice(0, APP_CONFIG.maxAlertItems).map((item) => {
+    if (item.type === 'below-cost') {
+      return (
+        'Harga jual di bawah modal: ' + item.sku + ' - ' + item.namaProduk +
+        ' (Modal ' + formatPlainNumber_(item.hargaModal) +
+        ', Jual ' + formatPlainNumber_(item.hargaJual) + ')'
+      );
+    }
+    return (
+      'Margin rendah (< ' + formatPlainNumber_(APP_CONFIG.minMarginPercent) + '%): ' + item.sku + ' - ' + item.namaProduk +
+      ' (Margin ' + formatPlainNumber_(item.marginPercent) + '%)'
+    );
+  });
+
+  return {
+    lowStockItems: lowStockItems,
+    pricingItems: pricingItems,
+    lowStockWarnings: lowStockWarnings,
+    pricingWarnings: pricingWarnings,
+  };
 }
 
 /**

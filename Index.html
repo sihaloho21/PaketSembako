@@ -292,7 +292,7 @@
         const tbody = document.getElementById('sheetTbody');
         tbody.innerHTML = '';
 
-        ['PRODUK', 'PENJUALAN', 'REKAP_PRODUK', 'REKAP_PELANGGAN'].forEach(function (sheetName) {
+        ['PRODUK', 'PENJUALAN', 'MUTASI_STOK', 'REKAP_PRODUK', 'REKAP_PELANGGAN'].forEach(function (sheetName) {
           const info = sheets[sheetName] || {};
           const tr = document.createElement('tr');
           tr.innerHTML =
