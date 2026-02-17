@@ -326,11 +326,21 @@
       let pieChart;
 
       const INTERVAL_MS = 30000;
+      const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
+      const API_BASE = resolveApiBase_();
 
       function init() {
         document.getElementById('btnRefresh').addEventListener('click', function () {
           fetchDashboard(true);
         });
+
+        if (!isAppsScriptRuntime_() && !API_BASE) {
+          showWarning([
+            'Endpoint API belum dikonfigurasi untuk mode Netlify.',
+            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL Dashboard.',
+          ]);
+          return;
+        }
 
         fetchDashboard(true);
 
@@ -345,16 +355,102 @@
 
       function fetchDashboard(forceRefresh) {
         setLoading(true);
-        google.script.run
-          .withSuccessHandler(function (payload) {
+        callDashboardBackend_(
+          forceRefresh,
+          function (payload) {
             setLoading(false);
             renderDashboard(payload);
-          })
-          .withFailureHandler(function (error) {
+          },
+          function (error) {
             setLoading(false);
             showWarning(['Gagal mengambil data dashboard.', String(error && error.message ? error.message : error)]);
-          })
-          .getDashboardData(forceRefresh);
+          }
+        );
+      }
+
+      function callDashboardBackend_(forceRefresh, onSuccess, onFailure) {
+        if (isAppsScriptRuntime_()) {
+          google.script.run
+            .withSuccessHandler(onSuccess)
+            .withFailureHandler(onFailure)
+            .getDashboardData(forceRefresh);
+          return;
+        }
+
+        if (!API_BASE) {
+          onFailure(new Error('API endpoint belum diset.'));
+          return;
+        }
+
+        callDashboardApi_(forceRefresh).then(onSuccess).catch(onFailure);
+      }
+
+      function callDashboardApi_(forceRefresh) {
+        const url = new URL(API_BASE);
+        url.searchParams.set('action', 'dashboard-data');
+        url.searchParams.set('forceRefresh', forceRefresh ? '1' : '0');
+        return fetchApiJson_(url.toString(), { method: 'GET', cache: 'no-store' });
+      }
+
+      async function fetchApiJson_(url, options) {
+        const response = await fetch(url, options || {});
+        let json;
+
+        try {
+          json = await response.json();
+        } catch (err) {
+          throw new Error('Respons API tidak valid (bukan JSON).');
+        }
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+        }
+
+        if (!json || json.ok !== true) {
+          throw new Error((json && json.error) || 'Permintaan API gagal.');
+        }
+
+        return json.data;
+      }
+
+      function resolveApiBase_() {
+        const queryApi = sanitizeApiBase_(new URL(window.location.href).searchParams.get('apiBase'));
+        if (queryApi) {
+          try {
+            localStorage.setItem(API_BASE_STORAGE_KEY, queryApi);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return queryApi;
+        }
+
+        const windowApi = sanitizeApiBase_(window.APP_API_BASE);
+        if (windowApi) {
+          try {
+            localStorage.setItem(API_BASE_STORAGE_KEY, windowApi);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return windowApi;
+        }
+
+        try {
+          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+        } catch (err) {
+          return '';
+        }
+      }
+
+      function sanitizeApiBase_(value) {
+        const text = value === null || value === undefined ? '' : String(value).trim();
+        if (!text) {
+          return '';
+        }
+        return text.replace(/\/+$/, '');
+      }
+
+      function isAppsScriptRuntime_() {
+        return typeof google !== 'undefined' && google && google.script && google.script.run;
       }
 
       function renderDashboard(payload) {

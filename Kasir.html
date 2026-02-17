@@ -291,20 +291,26 @@
       let products = [];
       let productMap = {};
 
+      const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
+      const API_BASE = resolveApiBase_();
+
       function init() {
         document.getElementById('product').addEventListener('change', onProductChange);
         document.getElementById('qty').addEventListener('input', updateTotalPreview);
         document.getElementById('btnSave').addEventListener('click', saveTransaction);
         document.getElementById('btnReload').addEventListener('click', loadOptions);
-        if (!isAppsScriptRuntime_()) {
+
+        if (!isAppsScriptRuntime_() && !API_BASE) {
           setLoading(true);
-          setStatus('google.script.run tidak tersedia. Buka dari Google Sheets menu Kasir atau URL Web App Apps Script.', true);
+          setStatus(getMissingApiMessage_(), true);
           renderWarning([
             'Runtime Apps Script tidak terdeteksi.',
-            'Jika file dibuka langsung dari browser/preview lokal, fetch dan simpan transaksi tidak bisa berjalan.',
+            'Mode Netlify membutuhkan endpoint API Apps Script.',
+            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
           ]);
           return;
         }
+
         loadOptions();
       }
 
@@ -312,7 +318,7 @@
         setStatus('Memuat data kasir...', false);
         setLoading(true);
 
-        callAppsScript_(
+        callBackend_(
           'getKasirOptions',
           null,
           function (payload) {
@@ -435,7 +441,7 @@
         setStatus('Menyimpan transaksi...', false);
         setLoading(true);
 
-        callAppsScript_(
+        callBackend_(
           'saveKasirTransaction',
           {
             customerName: customer,
@@ -456,6 +462,107 @@
             setStatus('Gagal menyimpan: ' + extractError(error), true);
           }
         );
+      }
+
+      function callBackend_(functionName, payload, onSuccess, onFailure) {
+        if (isAppsScriptRuntime_()) {
+          callAppsScript_(functionName, payload, onSuccess, onFailure);
+          return;
+        }
+
+        const success = typeof onSuccess === 'function' ? onSuccess : function () {};
+        const failure = typeof onFailure === 'function' ? onFailure : function () {};
+
+        if (!API_BASE) {
+          failure(new Error(getMissingApiMessage_()));
+          return;
+        }
+
+        callApi_(functionName, payload).then(success).catch(failure);
+      }
+
+      function callApi_(functionName, payload) {
+        if (functionName === 'getKasirOptions') {
+          return fetchApi_('kasir-options', 'GET');
+        }
+        if (functionName === 'saveKasirTransaction') {
+          return fetchApi_('save-transaction', 'POST', payload || {});
+        }
+        return Promise.reject(new Error('Fungsi backend tidak dikenali: ' + functionName));
+      }
+
+      async function fetchApi_(action, method, payload) {
+        const url = new URL(API_BASE);
+        url.searchParams.set('action', action);
+
+        const options = {
+          method: method,
+          cache: 'no-store',
+        };
+
+        if (method === 'POST') {
+          options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+          options.body = JSON.stringify(payload || {});
+        }
+
+        const response = await fetch(url.toString(), options);
+        let json;
+
+        try {
+          json = await response.json();
+        } catch (err) {
+          throw new Error('Respons API tidak valid (bukan JSON).');
+        }
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+        }
+
+        if (!json || json.ok !== true) {
+          throw new Error((json && json.error) || 'Permintaan API gagal.');
+        }
+
+        return json.data;
+      }
+
+      function resolveApiBase_() {
+        const queryApi = sanitizeApiBase_(new URL(window.location.href).searchParams.get('apiBase'));
+        if (queryApi) {
+          try {
+            localStorage.setItem(API_BASE_STORAGE_KEY, queryApi);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return queryApi;
+        }
+
+        const windowApi = sanitizeApiBase_(window.APP_API_BASE);
+        if (windowApi) {
+          try {
+            localStorage.setItem(API_BASE_STORAGE_KEY, windowApi);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return windowApi;
+        }
+
+        try {
+          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+        } catch (err) {
+          return '';
+        }
+      }
+
+      function sanitizeApiBase_(value) {
+        const text = value === null || value === undefined ? '' : String(value).trim();
+        if (!text) {
+          return '';
+        }
+        return text.replace(/\/+$/, '');
+      }
+
+      function getMissingApiMessage_() {
+        return 'API endpoint belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman Kasir.';
       }
 
       function isAppsScriptRuntime_() {

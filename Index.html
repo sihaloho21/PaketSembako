@@ -221,22 +221,25 @@
     </main>
 
     <script>
+      const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
+      const API_BASE = resolveApiBase_();
+
       function init() {
         document.getElementById('btnKasir').addEventListener('click', function () {
-          window.location.href = withViewParam_('kasir');
+          navigateToView_('kasir');
         });
 
         document.getElementById('btnDashboard').addEventListener('click', function () {
-          window.location.href = withViewParam_('dashboard');
+          navigateToView_('dashboard');
         });
 
         document.getElementById('btnRefresh').addEventListener('click', function () {
           loadStatus();
         });
 
-        if (!isAppsScriptRuntime_()) {
+        if (!isAppsScriptRuntime_() && !API_BASE) {
           document.getElementById('metaInfo').textContent =
-            'google.script.run tidak tersedia. Halaman ini harus dibuka dari deploy Web App Apps Script.';
+            'Mode Netlify aktif, tapi endpoint API belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL.';
           return;
         }
 
@@ -246,14 +249,35 @@
       function loadStatus() {
         document.getElementById('metaInfo').textContent = 'Memuat status koneksi...';
 
-        google.script.run
-          .withSuccessHandler(function (payload) {
+        callStatusBackend_(
+          function (payload) {
             renderStatus(payload || {});
-          })
-          .withFailureHandler(function (error) {
+          },
+          function (error) {
             document.getElementById('metaInfo').textContent = 'Gagal memuat status: ' + extractError_(error);
-          })
-          .getAppConnectionStatus();
+          }
+        );
+      }
+
+      function callStatusBackend_(onSuccess, onFailure) {
+        if (isAppsScriptRuntime_()) {
+          google.script.run
+            .withSuccessHandler(onSuccess)
+            .withFailureHandler(onFailure)
+            .getAppConnectionStatus();
+          return;
+        }
+
+        if (!API_BASE) {
+          onFailure(new Error('API endpoint belum diset.'));
+          return;
+        }
+
+        const url = new URL(API_BASE);
+        url.searchParams.set('action', 'status');
+        fetchApiJson_(url.toString(), { method: 'GET', cache: 'no-store' })
+          .then(onSuccess)
+          .catch(onFailure);
       }
 
       function renderStatus(payload) {
@@ -299,10 +323,81 @@
           ' | Update: ' + stampText;
       }
 
+      function navigateToView_(view) {
+        if (isAppsScriptRuntime_()) {
+          window.location.href = withViewParam_(view);
+          return;
+        }
+
+        const fileName = view === 'kasir' ? 'Kasir.html' : 'Dashboard.html';
+        const url = new URL(fileName, window.location.href);
+        if (API_BASE) {
+          url.searchParams.set('apiBase', API_BASE);
+        }
+        window.location.href = url.toString();
+      }
+
       function withViewParam_(view) {
         const url = new URL(window.location.href);
         url.searchParams.set('view', view);
         return url.toString();
+      }
+
+      async function fetchApiJson_(url, options) {
+        const response = await fetch(url, options || {});
+        let json;
+
+        try {
+          json = await response.json();
+        } catch (err) {
+          throw new Error('Respons API tidak valid (bukan JSON).');
+        }
+
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+        }
+
+        if (!json || json.ok !== true) {
+          throw new Error((json && json.error) || 'Permintaan API gagal.');
+        }
+
+        return json.data;
+      }
+
+      function resolveApiBase_() {
+        const queryApi = sanitizeApiBase_(new URL(window.location.href).searchParams.get('apiBase'));
+        if (queryApi) {
+          try {
+            localStorage.setItem(API_BASE_STORAGE_KEY, queryApi);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return queryApi;
+        }
+
+        const windowApi = sanitizeApiBase_(window.APP_API_BASE);
+        if (windowApi) {
+          try {
+            localStorage.setItem(API_BASE_STORAGE_KEY, windowApi);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return windowApi;
+        }
+
+        try {
+          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+        } catch (err) {
+          return '';
+        }
+      }
+
+      function sanitizeApiBase_(value) {
+        const text = value === null || value === undefined ? '' : String(value).trim();
+        if (!text) {
+          return '';
+        }
+        return text.replace(/\/+$/, '');
       }
 
       function isAppsScriptRuntime_() {

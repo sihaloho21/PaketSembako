@@ -193,12 +193,17 @@ function showDashboardSidebar() {
 }
 
 /**
- * Endpoint Web App:
+ * Endpoint Web App + API:
  * - default: index
  * - ?view=kasir: kasir
  * - ?view=dashboard: dashboard
+ * - ?action=status|kasir-options|dashboard-data (JSON GET API)
  */
 function doGet(e) {
+  if (isApiRequest_(e)) {
+    return handleApiRequest_(e, 'GET');
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   try {
     ensureCoreSheets_(ss);
@@ -225,6 +230,199 @@ function doGet(e) {
   return HtmlService.createHtmlOutputFromFile(template)
     .setTitle(title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Endpoint JSON API untuk operasi write dari Netlify/front-end eksternal.
+ * Gunakan query `action`, body JSON text/plain, contoh:
+ * POST .../exec?action=save-transaction
+ * body: {"customerName":"Budi","sku":"BRS-001","qty":2,"note":""}
+ */
+function doPost(e) {
+  return handleApiRequest_(e, 'POST');
+}
+
+/**
+ * Cek apakah request ditujukan ke endpoint API JSON.
+ */
+function isApiRequest_(e) {
+  return !!safeText_(e && e.parameter && e.parameter.action);
+}
+
+/**
+ * Router API sederhana (GET/POST) untuk kebutuhan Netlify fetch.
+ */
+function handleApiRequest_(e, method) {
+  const action = safeText_(e && e.parameter && e.parameter.action)
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-');
+
+  if (!action) {
+    return jsonOutput_({
+      ok: false,
+      error: 'Parameter action wajib diisi.',
+      method: method,
+      generatedAt: new Date().toISOString(),
+    });
+  }
+
+  try {
+    const data = executeApiAction_(action, method, e);
+    return jsonOutput_({
+      ok: true,
+      action: action,
+      method: method,
+      generatedAt: new Date().toISOString(),
+      data: data,
+    });
+  } catch (err) {
+    return jsonOutput_({
+      ok: false,
+      action: action,
+      method: method,
+      generatedAt: new Date().toISOString(),
+      error: err && err.message ? err.message : String(err),
+    });
+  }
+}
+
+/**
+ * Eksekusi action API.
+ */
+function executeApiAction_(action, method, e) {
+  if (method === 'GET') {
+    if (action === 'status' || action === 'app-status' || action === 'connection-status') {
+      return getAppConnectionStatus();
+    }
+    if (action === 'kasir-options') {
+      return getKasirOptions();
+    }
+    if (action === 'dashboard-data') {
+      return getDashboardData(toBoolean_(e && e.parameter && e.parameter.forceRefresh));
+    }
+    throw new Error('Action GET tidak dikenal: ' + action);
+  }
+
+  if (method === 'POST') {
+    const body = parseApiPayload_(e);
+    const payload = body && body.payload ? body.payload : body;
+
+    if (action === 'save-transaction' || action === 'save-kasir-transaction') {
+      return saveKasirTransaction(payload || {});
+    }
+    if (action === 'sync-recap') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      ensureCoreSheets_(ss);
+      const result = rebuildRecapAndStock_(ss);
+      bumpDashboardVersion_();
+      return result;
+    }
+    if (action === 'setup-sheets') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      return { messages: ensureCoreSheets_(ss, { forceRecapHeaders: true }) };
+    }
+    if (action === 'generate-dummy-data') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      ensureCoreSheets_(ss, { forceRecapHeaders: true });
+
+      const produkSheet = findSheetByName_(ss, APP_CONFIG.sheets.PRODUK);
+      const penjualanSheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+
+      const dummyProducts = buildDummyProductCatalog_();
+      const productRows = dummyProducts.map((item) => ([
+        item.sku,
+        item.kategori,
+        item.namaProduk,
+        item.hargaModal,
+        item.satuan,
+        item.hargaJual,
+        item.stokAwal,
+        item.stokAwal,
+        item.hargaModal * item.stokAwal,
+      ]));
+      const salesRows = buildDummySalesRows_(dummyProducts);
+
+      overwriteSheetWithRows_(produkSheet, SHEET_HEADERS.PRODUK, productRows);
+      overwriteSheetWithRows_(penjualanSheet, SHEET_HEADERS.PENJUALAN, salesRows);
+
+      const recap = rebuildRecapAndStock_(ss);
+      bumpDashboardVersion_();
+
+      return {
+        totalProduk: productRows.length,
+        totalTransaksi: salesRows.length,
+        totalPelanggan: recap.totalPelanggan,
+      };
+    }
+    throw new Error('Action POST tidak dikenal: ' + action);
+  }
+
+  throw new Error('Method tidak didukung: ' + method);
+}
+
+/**
+ * Parse payload dari body request API.
+ */
+function parseApiPayload_(e) {
+  const raw = safeText_(e && e.postData && e.postData.contents);
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    // lanjut parse sebagai query string.
+  }
+
+  const form = parseQueryString_(raw);
+  if (form.payload) {
+    try {
+      form.payload = JSON.parse(form.payload);
+    } catch (err) {
+      // payload tetap string.
+    }
+  }
+  return form;
+}
+
+/**
+ * Parse query-string sederhana (a=1&b=2).
+ */
+function parseQueryString_(text) {
+  const result = {};
+  String(text || '')
+    .split('&')
+    .forEach((part) => {
+      if (!part) {
+        return;
+      }
+      const idx = part.indexOf('=');
+      const key = idx > -1 ? part.slice(0, idx) : part;
+      const val = idx > -1 ? part.slice(idx + 1) : '';
+      const decodedKey = decodeURIComponent(String(key).replace(/\+/g, ' '));
+      const decodedVal = decodeURIComponent(String(val).replace(/\+/g, ' '));
+      if (decodedKey) {
+        result[decodedKey] = decodedVal;
+      }
+    });
+  return result;
+}
+
+/**
+ * Konversi string bool dari query API.
+ */
+function toBoolean_(value) {
+  const text = safeText_(value).toLowerCase();
+  return text === '1' || text === 'true' || text === 'yes' || text === 'y';
+}
+
+/**
+ * Output JSON untuk API.
+ */
+function jsonOutput_(payload) {
+  return ContentService.createTextOutput(JSON.stringify(payload || {}))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
