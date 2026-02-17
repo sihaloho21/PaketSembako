@@ -42,6 +42,7 @@ const SHEET_HEADERS = {
   ],
   PENJUALAN: [
     'Tanggal',
+    'No. Invoice',
     'Nama Pelanggan',
     'SKU',
     'Nama Produk',
@@ -84,6 +85,7 @@ const FIELD_ALIASES = {
   modal: ['modal', 'nilai modal'],
 
   tanggal: ['tanggal', 'tgl', 'date', 'waktu', 'timestamp'],
+  invoice: ['no. invoice', 'no invoice', 'invoice', 'nomor invoice', 'id transaksi'],
   pelanggan: ['nama pelanggan', 'pelanggan', 'customer', 'pembeli', 'client'],
   hargaSatuan: ['harga satuan (rp)', 'harga satuan', 'harga', 'price'],
   qty: ['qty', 'jumlah', 'kuantitas', 'quantity'],
@@ -561,7 +563,7 @@ function getKasirOptions() {
   return {
     products: products,
     summary: {
-      transaksiHariIni: todaySales.length,
+      transaksiHariIni: countDistinctTransactions_(todaySales),
       omzetHariIni: round2_(todaySales.reduce((sum, row) => sum + row.total, 0)),
       labaHariIni: round2_(todaySales.reduce((sum, row) => sum + row.profit, 0)),
     },
@@ -574,7 +576,10 @@ function getKasirOptions() {
 
 /**
  * Simpan transaksi dari form kasir.
- * @param {{customerName:string, sku:string, qty:number|string, note:string}} payload
+ * Mendukung:
+ * - mode lama: {customerName, sku, qty, note}
+ * - mode cart: {customerName, note, items:[{sku, qty, note?}]}
+ * @param {{customerName:string, sku?:string, qty?:number|string, note?:string, items?:Array<{sku:string, qty:number|string, note?:string}>}} payload
  */
 function saveKasirTransaction(payload) {
   const lock = LockService.getDocumentLock();
@@ -585,36 +590,18 @@ function saveKasirTransaction(payload) {
     ensureCoreSheets_(ss);
 
     const customerName = safeText_(payload && payload.customerName);
-    const skuInput = safeText_(payload && payload.sku);
-    const qty = toNumber_(payload && payload.qty);
-    const note = safeText_(payload && payload.note);
+    const invoiceNote = safeText_(payload && payload.note);
+    const items = normalizeTransactionItems_(payload);
 
     if (!customerName) {
       throw new Error('Nama pelanggan wajib diisi.');
     }
-    if (!skuInput) {
-      throw new Error('SKU wajib dipilih.');
-    }
-    if (!qty || qty <= 0) {
-      throw new Error('Qty harus lebih dari 0.');
+    if (!items.length) {
+      throw new Error('Keranjang kosong. Tambahkan minimal 1 item.');
     }
 
     const warnings = [];
     const stateBefore = collectBusinessState_(ss, warnings);
-    const skuKey = normalizeSku_(skuInput);
-    const product = stateBefore.productsBySku[skuKey];
-
-    if (!product) {
-      throw new Error('SKU tidak ditemukan pada sheet PRODUK.');
-    }
-
-    const availableStock = round2_(product.stockCalculated);
-    if (qty > availableStock) {
-      throw new Error(
-        'Stok tidak cukup. Stok tersedia untuk ' + product.namaProduk + ': ' + formatPlainNumber_(availableStock)
-      );
-    }
-
     const salesCtx = stateBefore.salesContext;
     if (!salesCtx.sheet) {
       throw new Error('Sheet PENJUALAN tidak ditemukan.');
@@ -622,6 +609,7 @@ function saveKasirTransaction(payload) {
 
     const salesCols = resolveColumns_(salesCtx.headers, {
       tanggal: FIELD_ALIASES.tanggal,
+      invoice: FIELD_ALIASES.invoice,
       pelanggan: FIELD_ALIASES.pelanggan,
       sku: FIELD_ALIASES.sku,
       namaProduk: FIELD_ALIASES.namaProduk,
@@ -634,38 +622,92 @@ function saveKasirTransaction(payload) {
 
     ensureRequiredColumns_(salesCols, ['tanggal', 'pelanggan', 'sku', 'qty', 'total'], APP_CONFIG.sheets.PENJUALAN);
 
-    const hargaSatuan = round2_(product.hargaJual);
-    const total = round2_(hargaSatuan * qty);
+    const requestedBySku = {};
+    items.forEach((item) => {
+      const skuKey = normalizeSku_(item.sku);
+      requestedBySku[skuKey] = round2_((requestedBySku[skuKey] || 0) + round2_(item.qty));
+    });
+
+    const validatedItems = items.map((item) => {
+      const skuKey = normalizeSku_(item.sku);
+      const product = stateBefore.productsBySku[skuKey];
+      if (!product) {
+        throw new Error('SKU tidak ditemukan pada sheet PRODUK: ' + item.sku);
+      }
+
+      const availableStock = round2_(product.stockCalculated);
+      const requestedQty = round2_(requestedBySku[skuKey] || 0);
+      if (requestedQty > availableStock) {
+        throw new Error(
+          'Stok tidak cukup. Stok tersedia untuk ' + product.namaProduk + ': ' + formatPlainNumber_(availableStock)
+        );
+      }
+
+      const hargaSatuan = round2_(product.hargaJual);
+      const total = round2_(hargaSatuan * round2_(item.qty));
+
+      return {
+        sku: product.sku,
+        skuKey: skuKey,
+        namaProduk: product.namaProduk,
+        satuan: product.satuan,
+        qty: round2_(item.qty),
+        hargaSatuan: hargaSatuan,
+        total: total,
+        note: safeText_(item.note) || invoiceNote,
+        stokSisa: round2_(availableStock - requestedQty),
+      };
+    });
+
+    const invoiceNumber = generateInvoiceNumber_(stateBefore.timezone);
     const rowLength = Math.max(salesCtx.headers.length, SHEET_HEADERS.PENJUALAN.length);
-    const newRow = new Array(rowLength).fill('');
+    const now = new Date();
+    const newRows = validatedItems.map((item) => {
+      const newRow = new Array(rowLength).fill('');
+      assignRowValue_(newRow, salesCols.tanggal, now);
+      assignRowValue_(newRow, salesCols.invoice, invoiceNumber);
+      assignRowValue_(newRow, salesCols.pelanggan, customerName);
+      assignRowValue_(newRow, salesCols.sku, item.sku);
+      assignRowValue_(newRow, salesCols.namaProduk, item.namaProduk);
+      assignRowValue_(newRow, salesCols.satuan, item.satuan);
+      assignRowValue_(newRow, salesCols.hargaSatuan, item.hargaSatuan);
+      assignRowValue_(newRow, salesCols.qty, item.qty);
+      assignRowValue_(newRow, salesCols.total, item.total);
+      assignRowValue_(newRow, salesCols.catatan, item.note);
+      return newRow;
+    });
 
-    assignRowValue_(newRow, salesCols.tanggal, new Date());
-    assignRowValue_(newRow, salesCols.pelanggan, customerName);
-    assignRowValue_(newRow, salesCols.sku, product.sku);
-    assignRowValue_(newRow, salesCols.namaProduk, product.namaProduk);
-    assignRowValue_(newRow, salesCols.satuan, product.satuan);
-    assignRowValue_(newRow, salesCols.hargaSatuan, hargaSatuan);
-    assignRowValue_(newRow, salesCols.qty, qty);
-    assignRowValue_(newRow, salesCols.total, total);
-    assignRowValue_(newRow, salesCols.catatan, note);
-
-    salesCtx.sheet.appendRow(newRow);
+    if (newRows.length === 1) {
+      salesCtx.sheet.appendRow(newRows[0]);
+    } else {
+      const startRow = salesCtx.sheet.getLastRow() + 1;
+      salesCtx.sheet.getRange(startRow, 1, newRows.length, rowLength).setValues(newRows);
+    }
 
     const syncResult = rebuildRecapAndStock_(ss);
     bumpDashboardVersion_();
+
+    const totalQty = round2_(validatedItems.reduce((sum, item) => sum + item.qty, 0));
+    const totalBelanja = round2_(validatedItems.reduce((sum, item) => sum + item.total, 0));
 
     return {
       success: true,
       message: 'Transaksi berhasil disimpan.',
       transaksi: {
-        tanggal: new Date().toISOString(),
+        invoice: invoiceNumber,
+        tanggal: now.toISOString(),
         pelanggan: customerName,
-        sku: product.sku,
-        namaProduk: product.namaProduk,
-        qty: qty,
-        hargaSatuan: hargaSatuan,
-        total: total,
-        stokSisa: round2_(availableStock - qty),
+        totalItem: validatedItems.length,
+        totalQty: totalQty,
+        total: totalBelanja,
+        items: validatedItems.map((item) => ({
+          sku: item.sku,
+          namaProduk: item.namaProduk,
+          qty: item.qty,
+          hargaSatuan: item.hargaSatuan,
+          total: item.total,
+          stokSisa: item.stokSisa,
+        })),
       },
       recap: syncResult,
       warnings: warnings,
@@ -749,7 +791,7 @@ function rebuildRecapAndStock_(ss) {
   return {
     totalProduk: rekapProdukRows.length,
     totalPelanggan: pelangganRows.length,
-    totalTransaksi: state.sales.length,
+    totalTransaksi: countDistinctTransactions_(state.sales),
     warnings: warnings,
   };
 }
@@ -802,6 +844,7 @@ function buildDashboardPayload_() {
   const omzetPerHari = {};
   const qtyPerProduk = {};
   const pelangganMap = {};
+  const pelangganTransaksiSet = {};
 
   let omzetHariIni = 0;
   let totalLabaKotor = 0;
@@ -819,11 +862,18 @@ function buildDashboardPayload_() {
     if (!pelangganMap[row.pelanggan]) {
       pelangganMap[row.pelanggan] = { pelanggan: row.pelanggan, belanja: 0, profit: 0, qty: 0, transaksi: 0 };
     }
+    if (!pelangganTransaksiSet[row.pelanggan]) {
+      pelangganTransaksiSet[row.pelanggan] = {};
+    }
 
     pelangganMap[row.pelanggan].belanja += row.total;
     pelangganMap[row.pelanggan].profit += row.profit;
     pelangganMap[row.pelanggan].qty += row.qty;
-    pelangganMap[row.pelanggan].transaksi += 1;
+    const transaksiKey = getSalesTransactionKey_(row);
+    if (!pelangganTransaksiSet[row.pelanggan][transaksiKey]) {
+      pelangganTransaksiSet[row.pelanggan][transaksiKey] = true;
+      pelangganMap[row.pelanggan].transaksi += 1;
+    }
 
     totalLabaKotor += row.profit;
   });
@@ -873,7 +923,7 @@ function buildDashboardPayload_() {
     kpi: {
       omzetHariIni: round2_(omzetHariIni),
       totalLabaKotor: round2_(totalLabaKotor),
-      totalTransaksi: state.sales.length,
+      totalTransaksi: countDistinctTransactions_(state.sales),
       totalPelanggan: pelangganRows.length,
     },
     charts: {
@@ -910,6 +960,7 @@ function ensureCoreSheets_(ss, options) {
 
   ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PRODUK, SHEET_HEADERS.PRODUK, messages);
   ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PENJUALAN, SHEET_HEADERS.PENJUALAN, messages);
+  ensurePenjualanInvoiceColumn_(ss, messages);
   ensureSheetExistsWithHeader_(
     ss,
     APP_CONFIG.sheets.REKAP_PRODUK,
@@ -926,6 +977,32 @@ function ensureCoreSheets_(ss, options) {
   );
 
   return messages;
+}
+
+/**
+ * Pastikan sheet PENJUALAN memiliki kolom invoice (untuk transaksi multi-item).
+ * Kolom ditambahkan di ujung header agar aman terhadap data lama.
+ */
+function ensurePenjualanInvoiceColumn_(ss, messages) {
+  const sheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+  if (!sheet) {
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const readCols = Math.max(lastCol, 1);
+  const headers = sheet.getRange(1, 1, 1, readCols).getValues()[0].map((cell) => safeText_(cell));
+  const cols = resolveColumns_(headers, { invoice: FIELD_ALIASES.invoice });
+  if (cols.invoice > -1) {
+    return;
+  }
+
+  const targetCol = readCols + 1;
+  if (sheet.getMaxColumns() < targetCol) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), targetCol - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, targetCol).setValue(SHEET_HEADERS.PENJUALAN[1]);
+  messages.push('Menambahkan kolom invoice pada sheet ' + APP_CONFIG.sheets.PENJUALAN);
 }
 
 /**
@@ -958,7 +1035,7 @@ function getAppConnectionStatus() {
     },
     stats: {
       totalProduk: state.products.length,
-      totalTransaksi: state.sales.length,
+      totalTransaksi: countDistinctTransactions_(state.sales),
       totalPelanggan: Object.keys(state.customerAgg).length,
     },
   };
@@ -1034,6 +1111,7 @@ function buildDummySalesRows_(products) {
   const now = new Date();
   const startDate = new Date(now);
   startDate.setDate(startDate.getDate() - 40);
+  let invoiceSeq = 0;
 
   const targetTransactions = 220;
   let guard = 0;
@@ -1057,9 +1135,12 @@ function buildDummySalesRows_(products) {
     const customer = customers[Math.floor(Math.random() * customers.length)];
     const total = round2_(qty * product.hargaJual);
     const note = notes[Math.floor(Math.random() * notes.length)];
+    invoiceSeq += 1;
+    const invoice = 'INV-DMY-' + String(invoiceSeq).padStart(4, '0');
 
     rows.push([
       d,
+      invoice,
       customer,
       product.sku,
       product.namaProduk,
@@ -1121,6 +1202,7 @@ function collectBusinessState_(ss, warnings) {
 
   const soldBySku = {};
   const customerAgg = {};
+  const customerTransactionSet = {};
 
   sales.forEach((row) => {
     soldBySku[row.skuKey] = (soldBySku[row.skuKey] || 0) + row.qty;
@@ -1134,8 +1216,15 @@ function collectBusinessState_(ss, warnings) {
         profit: 0,
       };
     }
+    if (!customerTransactionSet[row.pelanggan]) {
+      customerTransactionSet[row.pelanggan] = {};
+    }
 
-    customerAgg[row.pelanggan].transaksi += 1;
+    const transaksiKey = getSalesTransactionKey_(row);
+    if (!customerTransactionSet[row.pelanggan][transaksiKey]) {
+      customerTransactionSet[row.pelanggan][transaksiKey] = true;
+      customerAgg[row.pelanggan].transaksi += 1;
+    }
     customerAgg[row.pelanggan].qty += row.qty;
     customerAgg[row.pelanggan].belanja += row.total;
     customerAgg[row.pelanggan].hpp += row.hpp;
@@ -1237,6 +1326,7 @@ function parseSales_(context, productsBySku, timezone, warnings) {
 
   const columns = resolveColumns_(context.headers, {
     tanggal: FIELD_ALIASES.tanggal,
+    invoice: FIELD_ALIASES.invoice,
     pelanggan: FIELD_ALIASES.pelanggan,
     sku: FIELD_ALIASES.sku,
     namaProduk: FIELD_ALIASES.namaProduk,
@@ -1282,6 +1372,8 @@ function parseSales_(context, productsBySku, timezone, warnings) {
     const tanggal = toDateOnly_(raw[fallbackDateCol]);
     const dateKey = tanggal ? Utilities.formatDate(tanggal, timezone, 'yyyy-MM-dd') : '';
 
+    const invoice = safeText_(raw[columns.invoice]);
+    const invoiceKey = normalizeInvoice_(invoice);
     const namaProduk = safeText_(raw[columns.namaProduk]) || (product ? product.namaProduk : skuRaw || 'Tanpa SKU');
     const pelanggan = safeText_(raw[columns.pelanggan]) || 'Tanpa Nama';
     const hpp = round2_(qty * (product ? product.hargaModal : 0));
@@ -1291,6 +1383,8 @@ function parseSales_(context, productsBySku, timezone, warnings) {
       rowNumber: item.rowNumber,
       date: tanggal,
       dateKey: dateKey,
+      invoice: invoice,
+      invoiceKey: invoiceKey,
       pelanggan: pelanggan,
       sku: skuRaw,
       skuKey: skuKey,
@@ -1576,6 +1670,96 @@ function normalizeHeader_(value) {
  */
 function normalizeSku_(value) {
   return safeText_(value).toUpperCase();
+}
+
+/**
+ * Normalisasi key invoice.
+ */
+function normalizeInvoice_(value) {
+  return safeText_(value).toUpperCase();
+}
+
+/**
+ * Ambil key transaksi untuk agregasi.
+ * Prioritas: invoice, fallback ke nomor baris agar data lama tetap valid.
+ */
+function getSalesTransactionKey_(saleRow) {
+  const invoiceKey = normalizeInvoice_(saleRow && saleRow.invoiceKey ? saleRow.invoiceKey : saleRow && saleRow.invoice);
+  if (invoiceKey) {
+    return 'INV:' + invoiceKey;
+  }
+
+  const rowNumber = Number(saleRow && saleRow.rowNumber);
+  if (rowNumber > 0) {
+    return 'ROW:' + rowNumber;
+  }
+
+  return 'ROW:UNKNOWN';
+}
+
+/**
+ * Hitung transaksi unik dari daftar baris penjualan.
+ */
+function countDistinctTransactions_(salesRows) {
+  const seen = {};
+  let total = 0;
+
+  (salesRows || []).forEach((row) => {
+    const key = getSalesTransactionKey_(row);
+    if (!seen[key]) {
+      seen[key] = true;
+      total += 1;
+    }
+  });
+
+  return total;
+}
+
+/**
+ * Normalisasi payload transaksi agar menjadi list item.
+ */
+function normalizeTransactionItems_(payload) {
+  const items = Array.isArray(payload && payload.items)
+    ? payload.items
+    : [{ sku: payload && payload.sku, qty: payload && payload.qty, note: payload && payload.note }];
+
+  const normalized = [];
+  items.forEach((item, idx) => {
+    const sku = safeText_(item && item.sku);
+    const qty = round2_(toNumber_(item && item.qty));
+    const note = safeText_(item && item.note);
+
+    if (!sku && !qty) {
+      return;
+    }
+    if (!sku) {
+      throw new Error('SKU item ke-' + (idx + 1) + ' wajib dipilih.');
+    }
+    if (!qty || qty <= 0) {
+      throw new Error('Qty item ke-' + (idx + 1) + ' harus lebih dari 0.');
+    }
+
+    normalized.push({
+      sku: sku,
+      qty: qty,
+      note: note,
+    });
+  });
+
+  return normalized;
+}
+
+/**
+ * Membuat nomor invoice unik per hari.
+ */
+function generateInvoiceNumber_(timezone) {
+  const tz = timezone || Session.getScriptTimeZone();
+  const props = PropertiesService.getDocumentProperties();
+  const datePart = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+  const seqKey = 'invoice_seq_' + datePart;
+  const nextSeq = Number(props.getProperty(seqKey) || '0') + 1;
+  props.setProperty(seqKey, String(nextSeq));
+  return 'INV-' + datePart + '-' + Utilities.formatString('%04d', nextSeq);
 }
 
 /**

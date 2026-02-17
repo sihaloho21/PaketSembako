@@ -117,6 +117,50 @@
         gap: 10px;
       }
 
+      .product-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 130px;
+        gap: 10px;
+      }
+
+      .qty-row {
+        display: grid;
+        grid-template-columns: minmax(90px, 130px) minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+      }
+
+      .btn {
+        cursor: pointer;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .btn-primary {
+        background: var(--brand);
+        border-color: var(--brand);
+        color: #fff;
+        font-weight: 600;
+      }
+
+      .btn-soft {
+        background: #ecf8fb;
+        border-color: #cae9f0;
+        color: #0a5563;
+        font-weight: 600;
+      }
+
+      .btn-danger {
+        background: #fff5f5;
+        border-color: #ffd0d0;
+        color: #c92a2a;
+      }
+
+      .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
       .product-meta {
         border: 1px dashed #cdd8e6;
         border-radius: 10px;
@@ -141,12 +185,61 @@
         font-weight: 600;
       }
 
+      .cart {
+        border: 1px solid #d8e2ef;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #edf2f8;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f8fbff;
+        color: #3d556f;
+        font-weight: 700;
+      }
+
+      .cart-empty {
+        text-align: center;
+        color: var(--sub);
+      }
+
+      .line-name {
+        font-weight: 600;
+      }
+
+      .line-sku {
+        font-size: 11px;
+        color: var(--sub);
+        margin-top: 2px;
+      }
+
+      .line-note {
+        font-size: 11px;
+        color: #6e5530;
+        margin-top: 3px;
+      }
+
       .total-box {
         border: 1px solid #c7e5cf;
         background: #effaf2;
         color: #1f7a31;
         border-radius: 10px;
         padding: 10px;
+        display: grid;
+        gap: 4px;
       }
 
       .total-box .k {
@@ -154,33 +247,19 @@
       }
 
       .total-box .v {
-        margin-top: 3px;
         font-size: 22px;
         font-weight: 800;
       }
 
+      .total-box .mini {
+        font-size: 12px;
+        color: #2f7f3d;
+      }
+
       .actions {
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: 1fr 1fr 1fr;
         gap: 8px;
-      }
-
-      .btn {
-        cursor: pointer;
-        border: 1px solid var(--line);
-        background: #fff;
-      }
-
-      .btn-primary {
-        background: var(--brand);
-        border-color: var(--brand);
-        color: #fff;
-        font-weight: 600;
-      }
-
-      .btn:disabled {
-        cursor: not-allowed;
-        opacity: 0.65;
       }
 
       .status {
@@ -208,14 +287,29 @@
         display: none;
       }
 
-      @media (max-width: 640px) {
-        .summary {
+      .invoice {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #0e4f5b;
+        background: #e8f7fa;
+        border: 1px solid #b9e4ec;
+        border-radius: 10px;
+        padding: 8px;
+        display: none;
+      }
+
+      @media (max-width: 760px) {
+        .summary,
+        .grid-2,
+        .product-row,
+        .qty-row,
+        .actions {
           grid-template-columns: 1fr;
         }
 
-        .grid-2,
-        .actions {
-          grid-template-columns: 1fr;
+        th:nth-child(3),
+        td:nth-child(3) {
+          display: none;
         }
       }
     </style>
@@ -223,7 +317,7 @@
   <body>
     <div class="card">
       <h1>Form Kasir</h1>
-      <div class="sub">Input transaksi ke sheet PENJUALAN, validasi stok dari sheet PRODUK.</div>
+      <div class="sub">Mode cart aktif: pilih beberapa SKU lalu simpan sekali transaksi dengan nomor invoice.</div>
 
       <div class="summary">
         <div class="summary-box">
@@ -241,16 +335,40 @@
       </div>
 
       <div class="form">
-        <div>
-          <label for="customer">Nama Pelanggan</label>
-          <input id="customer" type="text" placeholder="Contoh: Budi" autocomplete="off" />
+        <div class="grid-2">
+          <div>
+            <label for="customer">Nama Pelanggan</label>
+            <input id="customer" type="text" placeholder="Contoh: Budi" autocomplete="off" />
+          </div>
+          <div>
+            <label for="invoiceNote">Catatan Invoice</label>
+            <input id="invoiceNote" type="text" placeholder="Opsional (berlaku untuk transaksi ini)" autocomplete="off" />
+          </div>
         </div>
 
-        <div>
-          <label for="product">Produk (SKU)</label>
-          <select id="product">
-            <option value="">Memuat data produk...</option>
-          </select>
+        <div class="product-row">
+          <div>
+            <label for="product">Produk (SKU)</label>
+            <select id="product">
+              <option value="">Memuat data produk...</option>
+            </select>
+          </div>
+          <div>
+            <label for="qty">Qty</label>
+            <input id="qty" type="number" min="1" step="1" placeholder="0" />
+          </div>
+        </div>
+
+        <div class="qty-row">
+          <div>
+            <label for="itemNote">Catatan Item</label>
+            <input id="itemNote" type="text" placeholder="Opsional" autocomplete="off" />
+          </div>
+          <div>
+            <label for="selectedTotal">Subtotal Item Dipilih</label>
+            <input id="selectedTotal" type="text" value="Rp0" readonly />
+          </div>
+          <button id="btnAddItem" class="btn btn-soft" type="button">Tambah ke Keranjang</button>
         </div>
 
         <div class="product-meta">
@@ -261,28 +379,35 @@
           <div class="meta-row"><span class="meta-label">Stok Tersedia</span><span class="meta-value" id="metaStok">0</span></div>
         </div>
 
-        <div class="grid-2">
-          <div>
-            <label for="qty">Qty</label>
-            <input id="qty" type="number" min="1" step="1" placeholder="0" />
-          </div>
-          <div>
-            <label for="note">Catatan</label>
-            <textarea id="note" placeholder="Opsional"></textarea>
-          </div>
+        <div class="cart">
+          <table>
+            <thead>
+              <tr>
+                <th>Produk</th>
+                <th>Qty</th>
+                <th>Harga</th>
+                <th>Total</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="cartBody"></tbody>
+          </table>
         </div>
 
         <div class="total-box">
-          <div class="k">Total Transaksi</div>
-          <div class="v" id="total">Rp0</div>
+          <div class="k">Total Keranjang</div>
+          <div class="v" id="cartTotal">Rp0</div>
+          <div class="mini">Item: <span id="cartItemsCount">0</span> | Qty: <span id="cartQtyCount">0</span></div>
         </div>
 
         <div class="actions">
-          <button id="btnSave" class="btn btn-primary">Simpan Transaksi</button>
+          <button id="btnSave" class="btn btn-primary" type="button">Simpan Transaksi</button>
+          <button id="btnReset" class="btn btn-danger" type="button">Kosongkan Keranjang</button>
           <button id="btnReload" class="btn" type="button">Reload</button>
         </div>
       </div>
 
+      <div class="invoice" id="invoiceInfo"></div>
       <div class="status" id="status"></div>
       <div class="warn" id="warn"></div>
     </div>
@@ -290,14 +415,18 @@
     <script>
       let products = [];
       let productMap = {};
+      let cartItems = [];
+      let isLoading = false;
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_BASE = resolveApiBase_();
 
       function init() {
         document.getElementById('product').addEventListener('change', onProductChange);
-        document.getElementById('qty').addEventListener('input', updateTotalPreview);
+        document.getElementById('qty').addEventListener('input', updateSelectedPreview);
+        document.getElementById('btnAddItem').addEventListener('click', addItemToCart);
         document.getElementById('btnSave').addEventListener('click', saveTransaction);
+        document.getElementById('btnReset').addEventListener('click', resetCart);
         document.getElementById('btnReload').addEventListener('click', loadOptions);
 
         if (!isAppsScriptRuntime_() && !API_BASE) {
@@ -311,6 +440,7 @@
           return;
         }
 
+        renderCart();
         loadOptions();
       }
 
@@ -344,6 +474,7 @@
         renderWarning(payload.meta && payload.meta.warnings ? payload.meta.warnings : []);
 
         const select = document.getElementById('product');
+        const selectedSku = select.value;
         select.innerHTML = '';
 
         const defaultOption = document.createElement('option');
@@ -358,7 +489,12 @@
           select.appendChild(opt);
         });
 
-        clearProductMeta();
+        if (selectedSku && productMap[selectedSku]) {
+          select.value = selectedSku;
+        }
+
+        refreshCartPricingFromCatalog_();
+        onProductChange();
       }
 
       function renderSummary(summary) {
@@ -393,7 +529,7 @@
         document.getElementById('metaHarga').textContent = formatCurrency(item.hargaJual || 0);
         document.getElementById('metaStok').textContent = formatNumber(item.stokTersedia || 0);
 
-        updateTotalPreview();
+        updateSelectedPreview();
       }
 
       function clearProductMeta() {
@@ -402,65 +538,268 @@
         document.getElementById('metaSatuan').textContent = '-';
         document.getElementById('metaHarga').textContent = 'Rp0';
         document.getElementById('metaStok').textContent = '0';
-        document.getElementById('total').textContent = 'Rp0';
+        document.getElementById('selectedTotal').value = 'Rp0';
       }
 
-      function updateTotalPreview() {
+      function updateSelectedPreview() {
         const sku = document.getElementById('product').value;
         const item = productMap[sku];
         const qty = Number(document.getElementById('qty').value || 0);
 
         if (!item || !qty || qty <= 0) {
-          document.getElementById('total').textContent = 'Rp0';
+          document.getElementById('selectedTotal').value = 'Rp0';
           return;
         }
 
         const total = (Number(item.hargaJual) || 0) * qty;
-        document.getElementById('total').textContent = formatCurrency(total);
+        document.getElementById('selectedTotal').value = formatCurrency(total);
+      }
+
+      function addItemToCart() {
+        const sku = document.getElementById('product').value;
+        const qty = Number(document.getElementById('qty').value || 0);
+        const itemNote = document.getElementById('itemNote').value.trim();
+        const item = productMap[sku];
+
+        if (!item) {
+          setStatus('Pilih SKU terlebih dahulu.', true);
+          return;
+        }
+
+        if (!qty || qty <= 0) {
+          setStatus('Qty harus lebih dari 0.', true);
+          return;
+        }
+
+        const stokTersedia = Number(item.stokTersedia) || 0;
+        const qtyInCart = getCartQtyBySku_(sku);
+        if (qtyInCart + qty > stokTersedia) {
+          setStatus(
+            'Stok tidak cukup. Maksimal untuk ' + item.namaProduk + ' adalah ' + formatNumber(Math.max(0, stokTersedia - qtyInCart)),
+            true
+          );
+          return;
+        }
+
+        const existing = cartItems.find(function (row) { return row.sku === sku; });
+        if (existing) {
+          existing.qty = round2(existing.qty + qty);
+          if (itemNote) {
+            existing.note = itemNote;
+          }
+        } else {
+          cartItems.push({
+            sku: item.sku,
+            namaProduk: item.namaProduk,
+            satuan: item.satuan,
+            hargaSatuan: Number(item.hargaJual) || 0,
+            qty: round2(qty),
+            note: itemNote,
+          });
+        }
+
+        document.getElementById('qty').value = '';
+        document.getElementById('itemNote').value = '';
+        updateSelectedPreview();
+        renderCart();
+        setStatus('Item ditambahkan ke keranjang.', false);
+      }
+
+      function removeCartItem(index) {
+        if (index < 0 || index >= cartItems.length) {
+          return;
+        }
+        cartItems.splice(index, 1);
+        renderCart();
+        setStatus('Item dihapus dari keranjang.', false);
+      }
+
+      function resetCart() {
+        if (!cartItems.length) {
+          return;
+        }
+        cartItems = [];
+        renderCart();
+        setStatus('Keranjang dikosongkan.', false);
+      }
+
+      function renderCart() {
+        const tbody = document.getElementById('cartBody');
+        tbody.innerHTML = '';
+
+        if (!cartItems.length) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 5;
+          td.className = 'cart-empty';
+          td.textContent = 'Keranjang kosong. Tambahkan item di atas.';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          updateCartTotals_();
+          updateActionState_();
+          return;
+        }
+
+        cartItems.forEach(function (item, index) {
+          const tr = document.createElement('tr');
+
+          const total = round2((Number(item.hargaSatuan) || 0) * (Number(item.qty) || 0));
+          const noteHtml = item.note ? '<div class="line-note">Catatan: ' + escapeHtml(item.note) + '</div>' : '';
+
+          tr.innerHTML =
+            '<td><div class="line-name">' + escapeHtml(item.namaProduk || item.sku) + '</div>' +
+            '<div class="line-sku">' + escapeHtml(item.sku) + ' · ' + escapeHtml(item.satuan || '-') + '</div>' +
+            noteHtml +
+            '</td>' +
+            '<td>' + formatNumber(item.qty || 0) + '</td>' +
+            '<td>' + formatCurrency(item.hargaSatuan || 0) + '</td>' +
+            '<td>' + formatCurrency(total) + '</td>' +
+            '<td><button class="btn btn-danger" type="button" data-index="' + index + '">Hapus</button></td>';
+
+          tbody.appendChild(tr);
+        });
+
+        Array.prototype.forEach.call(tbody.querySelectorAll('button[data-index]'), function (btn) {
+          btn.addEventListener('click', function () {
+            removeCartItem(Number(btn.getAttribute('data-index')));
+          });
+        });
+
+        updateCartTotals_();
+        updateActionState_();
+      }
+
+      function updateCartTotals_() {
+        const totalQty = round2(
+          cartItems.reduce(function (sum, item) {
+            return sum + (Number(item.qty) || 0);
+          }, 0)
+        );
+        const totalBelanja = round2(
+          cartItems.reduce(function (sum, item) {
+            return sum + (Number(item.qty) || 0) * (Number(item.hargaSatuan) || 0);
+          }, 0)
+        );
+
+        document.getElementById('cartItemsCount').textContent = formatNumber(cartItems.length);
+        document.getElementById('cartQtyCount').textContent = formatNumber(totalQty);
+        document.getElementById('cartTotal').textContent = formatCurrency(totalBelanja);
       }
 
       function saveTransaction() {
         const customer = document.getElementById('customer').value.trim();
-        const sku = document.getElementById('product').value;
-        const qty = Number(document.getElementById('qty').value || 0);
-        const note = document.getElementById('note').value.trim();
+        const invoiceNote = document.getElementById('invoiceNote').value.trim();
 
         if (!customer) {
           setStatus('Nama pelanggan wajib diisi.', true);
           return;
         }
-        if (!sku) {
-          setStatus('Pilih SKU terlebih dahulu.', true);
+        if (!cartItems.length) {
+          setStatus('Keranjang masih kosong.', true);
           return;
         }
-        if (!qty || qty <= 0) {
-          setStatus('Qty harus lebih dari 0.', true);
-          return;
-        }
+
+        const payload = {
+          customerName: customer,
+          note: invoiceNote,
+          items: cartItems.map(function (item) {
+            return {
+              sku: item.sku,
+              qty: item.qty,
+              note: item.note || '',
+            };
+          }),
+        };
 
         setStatus('Menyimpan transaksi...', false);
         setLoading(true);
 
         callBackend_(
           'saveKasirTransaction',
-          {
-            customerName: customer,
-            sku: sku,
-            qty: qty,
-            note: note,
-          },
+          payload,
           function (res) {
             setLoading(false);
+            const trx = (res && res.transaksi) || {};
+            const invoice = trx.invoice || '-';
+
+            showInvoiceInfo_('Invoice ' + invoice + ' berhasil disimpan. Total: ' + formatCurrency(trx.total || 0));
             setStatus((res && res.message) || 'Transaksi berhasil disimpan.', false);
+
+            cartItems = [];
             document.getElementById('qty').value = '';
-            document.getElementById('note').value = '';
-            updateTotalPreview();
+            document.getElementById('itemNote').value = '';
+            document.getElementById('invoiceNote').value = '';
+            renderCart();
             loadOptions();
           },
           function (error) {
             setLoading(false);
             setStatus('Gagal menyimpan: ' + extractError(error), true);
           }
+        );
+      }
+
+      function showInvoiceInfo_(message) {
+        const box = document.getElementById('invoiceInfo');
+        if (!message) {
+          box.style.display = 'none';
+          box.textContent = '';
+          return;
+        }
+
+        box.style.display = 'block';
+        box.textContent = message;
+      }
+
+      function refreshCartPricingFromCatalog_() {
+        if (!cartItems.length) {
+          return;
+        }
+
+        let adjusted = false;
+
+        cartItems = cartItems
+          .map(function (item) {
+            const master = productMap[item.sku];
+            if (!master) {
+              adjusted = true;
+              return null;
+            }
+
+            const latestStock = Number(master.stokTersedia) || 0;
+            const safeQty = Math.min(round2(item.qty), latestStock);
+            if (!safeQty) {
+              adjusted = true;
+              return null;
+            }
+            if (safeQty !== round2(item.qty)) {
+              adjusted = true;
+            }
+
+            return {
+              sku: item.sku,
+              namaProduk: master.namaProduk,
+              satuan: master.satuan,
+              hargaSatuan: Number(master.hargaJual) || 0,
+              qty: safeQty,
+              note: item.note || '',
+            };
+          })
+          .filter(function (item) {
+            return !!item;
+          });
+
+        renderCart();
+        if (adjusted) {
+          setStatus('Keranjang disesuaikan dengan stok terbaru.', false);
+        }
+      }
+
+      function getCartQtyBySku_(sku) {
+        return round2(
+          cartItems.reduce(function (sum, item) {
+            return sum + (item.sku === sku ? Number(item.qty) || 0 : 0);
+          }, 0)
         );
       }
 
@@ -599,8 +938,15 @@
       }
 
       function setLoading(loading) {
-        document.getElementById('btnSave').disabled = loading;
-        document.getElementById('btnReload').disabled = loading;
+        isLoading = !!loading;
+        updateActionState_();
+      }
+
+      function updateActionState_() {
+        document.getElementById('btnAddItem').disabled = isLoading;
+        document.getElementById('btnReload').disabled = isLoading;
+        document.getElementById('btnReset').disabled = isLoading || !cartItems.length;
+        document.getElementById('btnSave').disabled = isLoading || !cartItems.length;
       }
 
       function setStatus(message, isError) {
@@ -630,6 +976,10 @@
         }).format(Number(value) || 0);
       }
 
+      function round2(value) {
+        return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+      }
+
       function escapeHtml(text) {
         return String(text)
           .replace(/&/g, '&amp;')
@@ -643,3 +993,4 @@
     </script>
   </body>
 </html>
+
