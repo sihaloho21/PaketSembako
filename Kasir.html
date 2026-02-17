@@ -296,6 +296,15 @@
         document.getElementById('qty').addEventListener('input', updateTotalPreview);
         document.getElementById('btnSave').addEventListener('click', saveTransaction);
         document.getElementById('btnReload').addEventListener('click', loadOptions);
+        if (!isAppsScriptRuntime_()) {
+          setLoading(true);
+          setStatus('google.script.run tidak tersedia. Buka dari Google Sheets menu Kasir atau URL Web App Apps Script.', true);
+          renderWarning([
+            'Runtime Apps Script tidak terdeteksi.',
+            'Jika file dibuka langsung dari browser/preview lokal, fetch dan simpan transaksi tidak bisa berjalan.',
+          ]);
+          return;
+        }
         loadOptions();
       }
 
@@ -303,17 +312,19 @@
         setStatus('Memuat data kasir...', false);
         setLoading(true);
 
-        google.script.run
-          .withSuccessHandler(function (payload) {
+        callAppsScript_(
+          'getKasirOptions',
+          null,
+          function (payload) {
             setLoading(false);
             renderOptions(payload || {});
             setStatus('Data kasir siap digunakan.', false);
-          })
-          .withFailureHandler(function (error) {
+          },
+          function (error) {
             setLoading(false);
             setStatus('Gagal memuat data: ' + extractError(error), true);
-          })
-          .getKasirOptions();
+          }
+        );
       }
 
       function renderOptions(payload) {
@@ -424,25 +435,60 @@
         setStatus('Menyimpan transaksi...', false);
         setLoading(true);
 
-        google.script.run
-          .withSuccessHandler(function (res) {
+        callAppsScript_(
+          'saveKasirTransaction',
+          {
+            customerName: customer,
+            sku: sku,
+            qty: qty,
+            note: note,
+          },
+          function (res) {
             setLoading(false);
             setStatus((res && res.message) || 'Transaksi berhasil disimpan.', false);
             document.getElementById('qty').value = '';
             document.getElementById('note').value = '';
             updateTotalPreview();
             loadOptions();
-          })
-          .withFailureHandler(function (error) {
+          },
+          function (error) {
             setLoading(false);
             setStatus('Gagal menyimpan: ' + extractError(error), true);
-          })
-          .saveKasirTransaction({
-            customerName: customer,
-            sku: sku,
-            qty: qty,
-            note: note,
-          });
+          }
+        );
+      }
+
+      function isAppsScriptRuntime_() {
+        return (
+          typeof google !== 'undefined' &&
+          google &&
+          google.script &&
+          google.script.run
+        );
+      }
+
+      function callAppsScript_(functionName, payload, onSuccess, onFailure) {
+        if (!isAppsScriptRuntime_()) {
+          onFailure(new Error('google.script.run tidak tersedia pada context ini.'));
+          return;
+        }
+
+        const success = typeof onSuccess === 'function' ? onSuccess : function () {};
+        const failure = typeof onFailure === 'function' ? onFailure : function () {};
+        const runner = google.script.run
+          .withSuccessHandler(success)
+          .withFailureHandler(failure);
+
+        if (typeof runner[functionName] !== 'function') {
+          failure(new Error('Fungsi server tidak ditemukan: ' + functionName));
+          return;
+        }
+
+        if (payload === null || payload === undefined) {
+          runner[functionName]();
+        } else {
+          runner[functionName](payload);
+        }
       }
 
       function setLoading(loading) {
