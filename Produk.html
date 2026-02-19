@@ -248,6 +248,31 @@
         box-shadow: 0 10px 24px rgba(20, 38, 63, 0.08);
       }
 
+      .table-pagination {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .table-pagination-info {
+        font-size: 12px;
+        color: #4f6179;
+      }
+
+      .table-pagination-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .table-pagination-actions .btn {
+        width: auto;
+        min-width: 110px;
+        padding: 8px 12px;
+      }
+
       table {
         width: 100%;
         border-collapse: collapse;
@@ -333,6 +358,21 @@
         .grid-4,
         .actions {
           grid-template-columns: 1fr;
+        }
+
+        .table-pagination {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .table-pagination-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .table-pagination-actions .btn {
+          width: 100%;
+          min-width: 0;
         }
       }
     </style>
@@ -483,6 +523,13 @@
             <tbody id="productTableBody"></tbody>
           </table>
         </div>
+        <div class="table-pagination">
+          <div class="table-pagination-info" id="tablePaginationInfo">Menampilkan 0 dari 0 produk</div>
+          <div class="table-pagination-actions">
+            <button id="btnTablePrev" class="btn btn-soft" type="button">Sebelumnya</button>
+            <button id="btnTableNext" class="btn btn-soft" type="button">Berikutnya</button>
+          </div>
+        </div>
       </div>
 
       <div class="status" id="status"></div>
@@ -493,6 +540,8 @@
       let products = [];
       let productMap = {};
       let isLoading = false;
+      const TABLE_PAGE_SIZE = 30;
+      let tableCurrentPage = 1;
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_BASE = resolveApiBase_();
@@ -512,8 +561,10 @@
         document.getElementById('btnBulkTemplate').addEventListener('click', fillBulkTemplate_);
         document.getElementById('editSkuSelect').addEventListener('change', onSelectEditSku_);
         document.getElementById('formCategoryFilter').addEventListener('change', onFormCategoryFilterChange_);
-        document.getElementById('search').addEventListener('input', renderProductTable_);
-        document.getElementById('tableCategoryFilter').addEventListener('change', renderProductTable_);
+        document.getElementById('search').addEventListener('input', onTableFilterChange_);
+        document.getElementById('tableCategoryFilter').addEventListener('change', onTableFilterChange_);
+        document.getElementById('btnTablePrev').addEventListener('click', onTablePrevPage_);
+        document.getElementById('btnTableNext').addEventListener('click', onTableNextPage_);
         document.getElementById('productTableBody').addEventListener('click', onProductTableAction_);
 
         if (!isAppsScriptRuntime_() && !API_BASE) {
@@ -568,6 +619,7 @@
         populateFormCategoryFilter_();
         populateEditSkuSelect_();
         populateTableCategoryFilter_();
+        tableCurrentPage = 1;
         renderProductTable_();
 
         const currentSku = normalizeSkuText_(document.getElementById('sku').value);
@@ -671,11 +723,15 @@
         populateEditSkuSelect_();
       }
 
-      function renderProductTable_() {
-        const tbody = document.getElementById('productTableBody');
+      function onTableFilterChange_() {
+        tableCurrentPage = 1;
+        renderProductTable_();
+      }
+
+      function getFilteredProductsForTable_() {
         const keyword = safeText_(document.getElementById('search').value).toLowerCase();
         const categoryFilter = safeText_(document.getElementById('tableCategoryFilter').value).toLowerCase();
-        const rows = products.filter(function (item) {
+        return products.filter(function (item) {
           const keywordMatch = !keyword || (
             safeText_(item.sku).toLowerCase().indexOf(keyword) > -1 ||
             safeText_(item.namaProduk).toLowerCase().indexOf(keyword) > -1 ||
@@ -684,17 +740,74 @@
           const categoryMatch = !categoryFilter || safeText_(item.kategori).toLowerCase() === categoryFilter;
           return keywordMatch && categoryMatch;
         });
+      }
+
+      function updateTablePaginationUi_(totalRows, totalPages, startIdx, endIdx) {
+        const infoEl = document.getElementById('tablePaginationInfo');
+        const prevBtn = document.getElementById('btnTablePrev');
+        const nextBtn = document.getElementById('btnTableNext');
+
+        if (infoEl) {
+          if (!totalRows) {
+            infoEl.textContent = 'Menampilkan 0 dari 0 produk';
+          } else {
+            infoEl.textContent =
+              'Menampilkan ' + formatNumber(startIdx + 1) + '-' + formatNumber(endIdx) +
+              ' dari ' + formatNumber(totalRows) +
+              ' produk (Hal ' + tableCurrentPage + '/' + totalPages + ')';
+          }
+        }
+
+        if (prevBtn) {
+          prevBtn.disabled = isLoading || !totalRows || tableCurrentPage <= 1;
+        }
+        if (nextBtn) {
+          nextBtn.disabled = isLoading || !totalRows || tableCurrentPage >= totalPages;
+        }
+      }
+
+      function onTablePrevPage_() {
+        if (isLoading || tableCurrentPage <= 1) {
+          return;
+        }
+        tableCurrentPage -= 1;
+        renderProductTable_();
+      }
+
+      function onTableNextPage_() {
+        if (isLoading) {
+          return;
+        }
+        const totalRows = getFilteredProductsForTable_().length;
+        const totalPages = Math.max(1, Math.ceil(totalRows / TABLE_PAGE_SIZE));
+        if (tableCurrentPage >= totalPages) {
+          return;
+        }
+        tableCurrentPage += 1;
+        renderProductTable_();
+      }
+
+      function renderProductTable_() {
+        const tbody = document.getElementById('productTableBody');
+        const rows = getFilteredProductsForTable_();
+        const totalRows = rows.length;
+        const totalPages = Math.max(1, Math.ceil(totalRows / TABLE_PAGE_SIZE));
+        tableCurrentPage = Math.min(Math.max(1, tableCurrentPage), totalPages);
+        const startIdx = totalRows ? (tableCurrentPage - 1) * TABLE_PAGE_SIZE : 0;
+        const endIdx = totalRows ? Math.min(startIdx + TABLE_PAGE_SIZE, totalRows) : 0;
+        const pageRows = rows.slice(startIdx, endIdx);
 
         tbody.innerHTML = '';
-        if (!rows.length) {
+        if (!pageRows.length) {
           const tr = document.createElement('tr');
           tr.innerHTML = '<td colspan="10">Data produk tidak ditemukan.</td>';
           tbody.appendChild(tr);
           updateActionState_();
+          updateTablePaginationUi_(totalRows, totalPages, 0, 0);
           return;
         }
 
-        rows.forEach(function (item) {
+        pageRows.forEach(function (item) {
           const tr = document.createElement('tr');
           tr.innerHTML =
             '<td>' + escapeHtml(item.sku) + '</td>' +
@@ -714,6 +827,7 @@
         });
 
         updateActionState_();
+        updateTablePaginationUi_(totalRows, totalPages, startIdx, endIdx);
       }
 
       function onProductTableAction_(event) {
@@ -1236,6 +1350,10 @@
         document.getElementById('formCategoryFilter').disabled = isLoading;
         document.getElementById('search').disabled = isLoading;
         document.getElementById('tableCategoryFilter').disabled = isLoading;
+        if (isLoading) {
+          document.getElementById('btnTablePrev').disabled = true;
+          document.getElementById('btnTableNext').disabled = true;
+        }
       }
 
       function setStatus(message, isError) {
