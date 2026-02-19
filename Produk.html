@@ -233,6 +233,12 @@
         margin-top: 10px;
       }
 
+      .table-filter-row {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: minmax(220px, 320px);
+      }
+
       .table-wrap {
         margin-top: 8px;
         border: 1px solid #cfdbeb;
@@ -440,7 +446,17 @@
 
       <div class="section">
         <h2>Daftar Produk</h2>
-        <div class="table-tools section-sub">Klik Edit untuk memuat data ke form, atau Hapus untuk delete langsung.</div>
+        <div class="table-tools">
+          <div class="table-filter-row">
+            <div>
+              <label for="tableCategoryFilter">Filter Kategori</label>
+              <select id="tableCategoryFilter">
+                <option value="">Semua Kategori</option>
+              </select>
+            </div>
+          </div>
+          <div class="section-sub">Klik Edit untuk memuat data ke form, atau Hapus untuk delete langsung.</div>
+        </div>
 
         <div class="table-wrap">
           <table>
@@ -490,6 +506,7 @@
         document.getElementById('btnBulkTemplate').addEventListener('click', fillBulkTemplate_);
         document.getElementById('editSkuSelect').addEventListener('change', onSelectEditSku_);
         document.getElementById('search').addEventListener('input', renderProductTable_);
+        document.getElementById('tableCategoryFilter').addEventListener('change', renderProductTable_);
         document.getElementById('productTableBody').addEventListener('click', onProductTableAction_);
 
         if (!isAppsScriptRuntime_() && !API_BASE) {
@@ -542,6 +559,7 @@
 
         renderWarnings_(payload.warnings || []);
         populateEditSkuSelect_();
+        populateTableCategoryFilter_();
         renderProductTable_();
 
         const currentSku = normalizeSkuText_(document.getElementById('sku').value);
@@ -572,18 +590,53 @@
         }
       }
 
+      function populateTableCategoryFilter_() {
+        const select = document.getElementById('tableCategoryFilter');
+        const selected = safeText_(select.value);
+        const categorySet = {};
+
+        products.forEach(function (item) {
+          const kategori = safeText_(item.kategori);
+          if (kategori) {
+            categorySet[kategori] = true;
+          }
+        });
+
+        const categories = Object.keys(categorySet).sort(function (a, b) {
+          return a.localeCompare(b, 'id', { sensitivity: 'base' });
+        });
+
+        select.innerHTML = '';
+
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = 'Semua Kategori';
+        select.appendChild(defaultOpt);
+
+        categories.forEach(function (kategori) {
+          const opt = document.createElement('option');
+          opt.value = kategori;
+          opt.textContent = kategori;
+          select.appendChild(opt);
+        });
+
+        if (selected && categories.indexOf(selected) > -1) {
+          select.value = selected;
+        }
+      }
+
       function renderProductTable_() {
         const tbody = document.getElementById('productTableBody');
         const keyword = safeText_(document.getElementById('search').value).toLowerCase();
+        const categoryFilter = safeText_(document.getElementById('tableCategoryFilter').value).toLowerCase();
         const rows = products.filter(function (item) {
-          if (!keyword) {
-            return true;
-          }
-          return (
+          const keywordMatch = !keyword || (
             safeText_(item.sku).toLowerCase().indexOf(keyword) > -1 ||
             safeText_(item.namaProduk).toLowerCase().indexOf(keyword) > -1 ||
             safeText_(item.kategori).toLowerCase().indexOf(keyword) > -1
           );
+          const categoryMatch = !categoryFilter || safeText_(item.kategori).toLowerCase() === categoryFilter;
+          return keywordMatch && categoryMatch;
         });
 
         tbody.innerHTML = '';
@@ -1135,6 +1188,7 @@
         document.getElementById('btnBulkTemplate').disabled = isLoading;
         document.getElementById('editSkuSelect').disabled = isLoading;
         document.getElementById('search').disabled = isLoading;
+        document.getElementById('tableCategoryFilter').disabled = isLoading;
       }
 
       function setStatus(message, isError) {
