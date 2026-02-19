@@ -373,6 +373,12 @@
             </select>
           </div>
           <div>
+            <label for="formCategoryFilter">Filter Kategori (Form)</label>
+            <select id="formCategoryFilter">
+              <option value="">Semua Kategori</option>
+            </select>
+          </div>
+          <div>
             <label for="search">Cari di Tabel Produk</label>
             <input id="search" type="text" placeholder="Cari SKU / nama / kategori..." autocomplete="off" />
           </div>
@@ -505,6 +511,7 @@
         document.getElementById('btnSaveBulk').addEventListener('click', saveBatchProducts_);
         document.getElementById('btnBulkTemplate').addEventListener('click', fillBulkTemplate_);
         document.getElementById('editSkuSelect').addEventListener('change', onSelectEditSku_);
+        document.getElementById('formCategoryFilter').addEventListener('change', onFormCategoryFilterChange_);
         document.getElementById('search').addEventListener('input', renderProductTable_);
         document.getElementById('tableCategoryFilter').addEventListener('change', renderProductTable_);
         document.getElementById('productTableBody').addEventListener('click', onProductTableAction_);
@@ -558,6 +565,7 @@
         document.getElementById('sumModalStokAkhir').textContent = formatCurrency(summary.totalModalStokAkhir || 0);
 
         renderWarnings_(payload.warnings || []);
+        populateFormCategoryFilter_();
         populateEditSkuSelect_();
         populateTableCategoryFilter_();
         renderProductTable_();
@@ -570,41 +578,36 @@
 
       function populateEditSkuSelect_() {
         const select = document.getElementById('editSkuSelect');
-        const selected = select.value;
+        const selected = safeText_(select.value);
+        const categoryFilter = safeText_(document.getElementById('formCategoryFilter').value).toLowerCase();
+        const filteredProducts = products.filter(function (item) {
+          return !categoryFilter || safeText_(item.kategori).toLowerCase() === categoryFilter;
+        });
         select.innerHTML = '';
 
         const defaultOpt = document.createElement('option');
         defaultOpt.value = '';
-        defaultOpt.textContent = products.length ? 'Pilih SKU...' : 'Produk belum tersedia';
+        defaultOpt.textContent = !products.length
+          ? 'Produk belum tersedia'
+          : (filteredProducts.length ? 'Pilih SKU...' : 'Tidak ada SKU pada kategori ini');
         select.appendChild(defaultOpt);
 
-        products.forEach(function (item) {
+        filteredProducts.forEach(function (item) {
           const opt = document.createElement('option');
           opt.value = item.sku;
           opt.textContent = item.sku + ' - ' + item.namaProduk;
           select.appendChild(opt);
         });
 
-        if (selected && productMap[selected]) {
+        if (selected && filteredProducts.some(function (item) { return item.sku === selected; })) {
           select.value = selected;
         }
       }
 
-      function populateTableCategoryFilter_() {
-        const select = document.getElementById('tableCategoryFilter');
+      function populateFormCategoryFilter_() {
+        const select = document.getElementById('formCategoryFilter');
         const selected = safeText_(select.value);
-        const categorySet = {};
-
-        products.forEach(function (item) {
-          const kategori = safeText_(item.kategori);
-          if (kategori) {
-            categorySet[kategori] = true;
-          }
-        });
-
-        const categories = Object.keys(categorySet).sort(function (a, b) {
-          return a.localeCompare(b, 'id', { sensitivity: 'base' });
-        });
+        const categories = listProductCategories_();
 
         select.innerHTML = '';
 
@@ -623,6 +626,49 @@
         if (selected && categories.indexOf(selected) > -1) {
           select.value = selected;
         }
+      }
+
+      function populateTableCategoryFilter_() {
+        const select = document.getElementById('tableCategoryFilter');
+        const selected = safeText_(select.value);
+        const categories = listProductCategories_();
+
+        select.innerHTML = '';
+
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = 'Semua Kategori';
+        select.appendChild(defaultOpt);
+
+        categories.forEach(function (kategori) {
+          const opt = document.createElement('option');
+          opt.value = kategori;
+          opt.textContent = kategori;
+          select.appendChild(opt);
+        });
+
+        if (selected && categories.indexOf(selected) > -1) {
+          select.value = selected;
+        }
+      }
+
+      function listProductCategories_() {
+        const categorySet = {};
+
+        products.forEach(function (item) {
+          const kategori = safeText_(item.kategori);
+          if (kategori) {
+            categorySet[kategori] = true;
+          }
+        });
+
+        return Object.keys(categorySet).sort(function (a, b) {
+          return a.localeCompare(b, 'id', { sensitivity: 'base' });
+        });
+      }
+
+      function onFormCategoryFilterChange_() {
+        populateEditSkuSelect_();
       }
 
       function renderProductTable_() {
@@ -1187,6 +1233,7 @@
         document.getElementById('btnSaveBulk').disabled = isLoading;
         document.getElementById('btnBulkTemplate').disabled = isLoading;
         document.getElementById('editSkuSelect').disabled = isLoading;
+        document.getElementById('formCategoryFilter').disabled = isLoading;
         document.getElementById('search').disabled = isLoading;
         document.getElementById('tableCategoryFilter').disabled = isLoading;
       }
