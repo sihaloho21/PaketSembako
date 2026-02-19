@@ -267,6 +267,11 @@
           <div class="chip">Akumulasi</div>
         </article>
         <article class="card">
+          <div class="label">Total Modal (Stok Akhir)</div>
+          <div class="value" id="kpiModal">Rp0</div>
+          <div class="chip">Harga Modal x Stok Akhir</div>
+        </article>
+        <article class="card">
           <div class="label">Jumlah Transaksi</div>
           <div class="value" id="kpiTransaksi">0</div>
           <div class="chip">Dari PENJUALAN</div>
@@ -495,6 +500,7 @@
       function renderKpi(kpi) {
         document.getElementById('kpiOmzet').textContent = formatCurrency(kpi.omzetHariIni || 0);
         document.getElementById('kpiProfit').textContent = formatCurrency(kpi.totalLabaKotor || 0);
+        document.getElementById('kpiModal').textContent = formatCurrency(kpi.totalModalStokAkhir || 0);
         document.getElementById('kpiTransaksi').textContent = formatNumber(kpi.totalTransaksi || 0);
         document.getElementById('kpiPelanggan').textContent = formatNumber(kpi.totalPelanggan || 0);
         document.getElementById('kpiAov').textContent = formatCurrency(kpi.aov || 0);

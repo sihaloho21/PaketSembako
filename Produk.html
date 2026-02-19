@@ -51,7 +51,7 @@
 
       .summary {
         display: grid;
-        grid-template-columns: repeat(3, minmax(140px, 1fr));
+        grid-template-columns: repeat(4, minmax(140px, 1fr));
         gap: 8px;
         margin-top: 12px;
       }
@@ -285,6 +285,10 @@
           <div class="k">Alert Harga / Margin</div>
           <div class="v" id="sumPricing">0</div>
         </div>
+        <div class="summary-box">
+          <div class="k">Total Modal (Stok Akhir)</div>
+          <div class="v" id="sumModalStokAkhir">Rp0</div>
+        </div>
       </div>
 
       <div class="section">
@@ -470,6 +474,7 @@
         document.getElementById('sumProduk').textContent = formatNumber(summary.totalProduk || products.length || 0);
         document.getElementById('sumLowStock').textContent = formatNumber(summary.totalLowStock || 0);
         document.getElementById('sumPricing').textContent = formatNumber(summary.totalPricingAlerts || 0);
+        document.getElementById('sumModalStokAkhir').textContent = formatCurrency(summary.totalModalStokAkhir || 0);
 
         renderWarnings_(payload.warnings || []);
         populateEditSkuSelect_();

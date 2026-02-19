@@ -754,6 +754,11 @@ function getProductCrudData() {
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
   const alerts = buildProductAlerts_(state.products);
+  const totalModalStokAkhir = round2_(
+    state.products.reduce((sum, item) => {
+      return sum + round2_(item.hargaModal * item.stockCalculated);
+    }, 0)
+  );
 
   const items = state.products
     .map((item) => ({
@@ -780,6 +785,7 @@ function getProductCrudData() {
       totalProduk: items.length,
       totalLowStock: alerts.lowStockItems.length,
       totalPricingAlerts: alerts.pricingItems.length,
+      totalModalStokAkhir: totalModalStokAkhir,
     },
     lowStockItems: alerts.lowStockItems,
     pricingAlerts: alerts.pricingItems,
@@ -1488,6 +1494,11 @@ function buildDashboardPayload_() {
   const state = collectBusinessState_(ss, warnings);
   const alerts = buildProductAlerts_(state.products);
   const todayKey = Utilities.formatDate(new Date(), state.timezone, 'yyyy-MM-dd');
+  const totalModalStokAkhir = round2_(
+    state.products.reduce((sum, item) => {
+      return sum + round2_(item.hargaModal * item.stockCalculated);
+    }, 0)
+  );
 
   const omzetPerHari = {};
   const qtyPerProduk = {};
@@ -1656,6 +1667,7 @@ function buildDashboardPayload_() {
     kpi: {
       omzetHariIni: round2_(omzetHariIni),
       totalLabaKotor: round2_(totalLabaKotor),
+      totalModalStokAkhir: totalModalStokAkhir,
       totalTransaksi: totalTransaksi,
       totalPelanggan: pelangganRows.length,
       aov: aov,
@@ -1795,6 +1807,11 @@ function getAppConnectionStatus() {
   const warnings = [];
   const state = collectBusinessState_(ss, warnings);
   const alerts = buildProductAlerts_(state.products);
+  const totalModalStokAkhir = round2_(
+    state.products.reduce((sum, item) => {
+      return sum + round2_(item.hargaModal * item.stockCalculated);
+    }, 0)
+  );
 
   const rekapProdukSheet = findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PRODUK);
   const rekapPelangganSheet = findSheetByName_(ss, APP_CONFIG.sheets.REKAP_PELANGGAN);
@@ -1820,6 +1837,7 @@ function getAppConnectionStatus() {
       totalTransaksi: countDistinctTransactions_(state.sales),
       totalPelanggan: Object.keys(state.customerAgg).length,
       totalAlertStokMinimum: alerts.lowStockItems.length,
+      totalModalStokAkhir: totalModalStokAkhir,
     },
   };
 }
