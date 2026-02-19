@@ -5,16 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Form Kasir</title>
     <style>
+      @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap");
+
       :root {
-        --bg: #f5f8fc;
+        --bg: #f3f8ff;
         --panel: #ffffff;
-        --line: #d7e0ec;
-        --text: #1f2937;
-        --sub: #5b6b7f;
-        --brand: #0b7285;
-        --brand-soft: #e3f4f7;
-        --ok: #2b8a3e;
+        --line: #d7e3f0;
+        --text: #1a2433;
+        --sub: #5c6f86;
+        --brand: #0f766e;
+        --brand-2: #1d4ed8;
+        --brand-soft: #e7f5f3;
+        --ok: #1f8a46;
         --error: #c92a2a;
+        --warn-line: #f0d09a;
+        --warn-bg: #fff8e7;
+        --shadow: 0 20px 44px rgba(18, 34, 61, 0.12);
       }
 
       * {
@@ -24,65 +30,88 @@
       body {
         margin: 0;
         padding: 14px;
-        background: linear-gradient(180deg, #f9fcff 0%, var(--bg) 100%);
+        min-height: 100vh;
         color: var(--text);
-        font-family: "Segoe UI", Tahoma, sans-serif;
+        font-family: "Plus Jakarta Sans", "Segoe UI", Tahoma, sans-serif;
+        background:
+          radial-gradient(circle at 10% 10%, rgba(29, 78, 216, 0.14) 0%, transparent 34%),
+          radial-gradient(circle at 92% 0%, rgba(15, 118, 110, 0.16) 0%, transparent 36%),
+          linear-gradient(180deg, #f9fcff 0%, var(--bg) 64%, #eef7f4 100%);
       }
 
       .card {
-        background: var(--panel);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 252, 255, 0.97));
         border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 14px;
+        border-radius: 18px;
+        padding: 16px;
+        box-shadow: var(--shadow);
+        position: relative;
+        overflow: hidden;
+        animation: rise-in 0.45s ease both;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, var(--brand), var(--brand-2));
       }
 
       h1 {
         margin: 0;
-        font-size: 20px;
+        font-size: 22px;
+        font-family: "Sora", "Plus Jakarta Sans", sans-serif;
+        letter-spacing: -0.02em;
       }
 
       .sub {
-        margin-top: 4px;
+        margin-top: 6px;
         color: var(--sub);
         font-size: 12px;
+        line-height: 1.45;
       }
 
       .summary {
         display: grid;
         grid-template-columns: repeat(3, minmax(90px, 1fr));
-        gap: 8px;
-        margin-top: 12px;
+        gap: 10px;
+        margin-top: 14px;
       }
 
       .summary-box {
-        background: var(--brand-soft);
-        border: 1px solid #cae9f0;
-        border-radius: 10px;
-        padding: 8px;
+        background: linear-gradient(135deg, #ecf8ff, #e8f6f3);
+        border: 1px solid #cfe2f5;
+        border-radius: 12px;
+        padding: 10px;
+        box-shadow: 0 10px 24px rgba(15, 42, 72, 0.08);
+        animation: rise-in 0.55s ease both;
       }
 
       .summary-box .k {
         font-size: 11px;
-        color: #24545e;
+        color: #345677;
       }
 
       .summary-box .v {
-        margin-top: 3px;
-        font-size: 16px;
-        font-weight: 700;
-        color: #124652;
+        margin-top: 4px;
+        font-size: 18px;
+        font-weight: 800;
+        color: #113854;
       }
 
       .form {
-        margin-top: 12px;
+        margin-top: 14px;
         display: grid;
-        gap: 10px;
+        gap: 12px;
       }
 
       label {
         font-size: 12px;
+        font-weight: 600;
         color: var(--sub);
-        margin-bottom: 4px;
+        margin-bottom: 5px;
         display: block;
       }
 
@@ -91,19 +120,31 @@
       textarea,
       button {
         width: 100%;
-        border-radius: 10px;
+        border-radius: 11px;
         border: 1px solid var(--line);
-        padding: 9px 10px;
+        padding: 10px 11px;
         font-size: 14px;
         font-family: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        background: #ffffff;
+        color: var(--text);
+      }
+
+      input[readonly] {
+        background: #f2f7ff;
+        color: #23486a;
       }
 
       input:focus,
       select:focus,
       textarea:focus {
         outline: none;
-        border-color: var(--brand);
-        box-shadow: 0 0 0 3px rgba(11, 114, 133, 0.12);
+        border-color: #75a4dc;
+        box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.1);
       }
 
       textarea {
@@ -133,41 +174,50 @@
       .btn {
         cursor: pointer;
         border: 1px solid var(--line);
-        background: #fff;
+        background: linear-gradient(135deg, #ffffff, #f4f9ff);
+        color: #223247;
+        font-weight: 600;
+        transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      }
+
+      .btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        border-color: #aac2de;
+        box-shadow: 0 10px 24px rgba(20, 42, 70, 0.14);
       }
 
       .btn-primary {
-        background: var(--brand);
-        border-color: var(--brand);
-        color: #fff;
-        font-weight: 600;
+        background: linear-gradient(135deg, var(--brand), #0d9488);
+        border-color: #0a766f;
+        color: #ffffff;
       }
 
       .btn-soft {
-        background: #ecf8fb;
-        border-color: #cae9f0;
-        color: #0a5563;
-        font-weight: 600;
+        background: linear-gradient(135deg, #ebf7ff, #e8f7f3);
+        border-color: #bfdff2;
+        color: #105271;
       }
 
       .btn-danger {
-        background: #fff5f5;
-        border-color: #ffd0d0;
-        color: #c92a2a;
+        background: linear-gradient(135deg, #fff1f1, #ffeaea);
+        border-color: #f4c3c3;
+        color: #b42626;
       }
 
       .btn:disabled {
         cursor: not-allowed;
-        opacity: 0.65;
+        opacity: 0.6;
+        box-shadow: none;
+        transform: none;
       }
 
       .product-meta {
-        border: 1px dashed #cdd8e6;
-        border-radius: 10px;
+        border: 1px dashed #bed2e8;
+        border-radius: 12px;
         padding: 10px;
         display: grid;
-        gap: 6px;
-        background: #fbfdff;
+        gap: 7px;
+        background: linear-gradient(180deg, #fafdff, #f3f8ff);
       }
 
       .meta-row {
@@ -182,13 +232,15 @@
       }
 
       .meta-value {
-        font-weight: 600;
+        font-weight: 700;
       }
 
       .cart {
-        border: 1px solid #d8e2ef;
-        border-radius: 10px;
+        border: 1px solid #cfdbeb;
+        border-radius: 12px;
         overflow: hidden;
+        background: #ffffff;
+        box-shadow: 0 10px 24px rgba(19, 38, 64, 0.08);
       }
 
       table {
@@ -199,25 +251,26 @@
 
       th,
       td {
-        border-bottom: 1px solid #edf2f8;
-        padding: 8px;
+        border-bottom: 1px solid #ebf1f8;
+        padding: 9px 8px;
         text-align: left;
         vertical-align: top;
       }
 
       th {
-        background: #f8fbff;
-        color: #3d556f;
+        background: #edf4ff;
+        color: #3a5674;
         font-weight: 700;
       }
 
       .cart-empty {
         text-align: center;
         color: var(--sub);
+        padding: 14px 10px;
       }
 
       .line-name {
-        font-weight: 600;
+        font-weight: 700;
       }
 
       .line-sku {
@@ -228,18 +281,19 @@
 
       .line-note {
         font-size: 11px;
-        color: #6e5530;
+        color: #6f552e;
         margin-top: 3px;
       }
 
       .total-box {
-        border: 1px solid #c7e5cf;
-        background: #effaf2;
-        color: #1f7a31;
-        border-radius: 10px;
+        border: 1px solid #bfe0ca;
+        background: linear-gradient(135deg, #effcf4, #e9f8ee);
+        color: #1d7a36;
+        border-radius: 12px;
         padding: 10px;
         display: grid;
         gap: 4px;
+        box-shadow: 0 10px 24px rgba(25, 96, 48, 0.1);
       }
 
       .total-box .k {
@@ -247,13 +301,13 @@
       }
 
       .total-box .v {
-        font-size: 22px;
+        font-size: 24px;
         font-weight: 800;
       }
 
       .total-box .mini {
         font-size: 12px;
-        color: #2f7f3d;
+        color: #2b7b3b;
       }
 
       .actions {
@@ -263,19 +317,20 @@
       }
 
       .stock-section {
-        margin-top: 2px;
-        border: 1px solid #cfe6d5;
-        border-radius: 10px;
-        background: #f4fbf5;
-        padding: 10px;
+        margin-top: 4px;
+        border: 1px solid #bfdac7;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #f2fbf4, #f8fff9);
+        padding: 11px;
         display: grid;
         gap: 10px;
       }
 
       .stock-head {
         font-size: 13px;
-        font-weight: 700;
-        color: #276738;
+        font-weight: 800;
+        color: #276c3a;
+        letter-spacing: 0.01em;
       }
 
       .stock-row {
@@ -289,13 +344,14 @@
         gap: 12px;
         flex-wrap: wrap;
         font-size: 12px;
-        color: #2d5c37;
+        color: #2a5d37;
       }
 
       .status {
-        margin-top: 10px;
+        margin-top: 12px;
         min-height: 18px;
         font-size: 12px;
+        font-weight: 600;
       }
 
       .status.ok {
@@ -309,23 +365,34 @@
       .warn {
         margin-top: 10px;
         font-size: 12px;
-        color: #915a00;
-        background: #fff8e1;
-        border: 1px solid #f2d39c;
-        border-radius: 10px;
-        padding: 9px;
+        color: #8f5c00;
+        background: var(--warn-bg);
+        border: 1px solid var(--warn-line);
+        border-radius: 11px;
+        padding: 10px;
         display: none;
       }
 
       .invoice {
-        margin-top: 10px;
+        margin-top: 12px;
         font-size: 12px;
-        color: #0e4f5b;
-        background: #e8f7fa;
-        border: 1px solid #b9e4ec;
-        border-radius: 10px;
-        padding: 8px;
+        color: #115062;
+        background: linear-gradient(135deg, #e8f8ff, #eaf7f4);
+        border: 1px solid #b8deea;
+        border-radius: 11px;
+        padding: 9px;
         display: none;
+      }
+
+      @keyframes rise-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       @media (max-width: 760px) {
