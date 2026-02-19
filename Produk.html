@@ -297,6 +297,42 @@
         z-index: 1;
       }
 
+      th.sortable {
+        padding: 0;
+      }
+
+      .th-sort-btn {
+        width: 100%;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+        padding: 9px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-weight: 700;
+      }
+
+      .th-sort-btn:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.45);
+      }
+
+      .th-sort-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+
+      .sort-indicator {
+        font-size: 11px;
+        color: #4f6179;
+        min-width: 14px;
+        text-align: right;
+      }
+
       tbody tr:hover {
         background: #f8fbff;
       }
@@ -506,17 +542,62 @@
 
         <div class="table-wrap">
           <table>
-            <thead>
+            <thead id="productTableHead">
               <tr>
-                <th>SKU</th>
-                <th>Nama Produk</th>
-                <th>Kategori</th>
-                <th>Satuan</th>
-                <th>Harga Modal</th>
-                <th>Harga Jual</th>
-                <th>Stok Awal</th>
-                <th>Stok Akhir</th>
-                <th>Stok Min</th>
+                <th class="sortable" data-sort-key="sku">
+                  <button class="th-sort-btn" type="button">
+                    <span>SKU</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="namaProduk">
+                  <button class="th-sort-btn" type="button">
+                    <span>Nama Produk</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="kategori">
+                  <button class="th-sort-btn" type="button">
+                    <span>Kategori</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="satuan">
+                  <button class="th-sort-btn" type="button">
+                    <span>Satuan</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="hargaModal">
+                  <button class="th-sort-btn" type="button">
+                    <span>Harga Modal</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="hargaJual">
+                  <button class="th-sort-btn" type="button">
+                    <span>Harga Jual</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="stokAwal">
+                  <button class="th-sort-btn" type="button">
+                    <span>Stok Awal</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="stokAkhir">
+                  <button class="th-sort-btn" type="button">
+                    <span>Stok Akhir</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
+                <th class="sortable" data-sort-key="stokMinimum">
+                  <button class="th-sort-btn" type="button">
+                    <span>Stok Min</span>
+                    <span class="sort-indicator"></span>
+                  </button>
+                </th>
                 <th>Aksi</th>
               </tr>
             </thead>
@@ -542,6 +623,8 @@
       let isLoading = false;
       const TABLE_PAGE_SIZE = 30;
       let tableCurrentPage = 1;
+      let tableSortKey = 'namaProduk';
+      let tableSortDirection = 'asc';
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_BASE = resolveApiBase_();
@@ -566,6 +649,7 @@
         document.getElementById('btnTablePrev').addEventListener('click', onTablePrevPage_);
         document.getElementById('btnTableNext').addEventListener('click', onTableNextPage_);
         document.getElementById('productTableBody').addEventListener('click', onProductTableAction_);
+        document.getElementById('productTableHead').addEventListener('click', onTableHeadSortClick_);
 
         if (!isAppsScriptRuntime_() && !API_BASE) {
           setLoading(true);
@@ -728,6 +812,29 @@
         renderProductTable_();
       }
 
+      function onTableHeadSortClick_(event) {
+        const button = event.target.closest('.th-sort-btn');
+        if (!button || isLoading) {
+          return;
+        }
+
+        const th = button.closest('th[data-sort-key]');
+        const nextSortKey = safeText_(th && th.getAttribute('data-sort-key'));
+        if (!nextSortKey) {
+          return;
+        }
+
+        if (tableSortKey === nextSortKey) {
+          tableSortDirection = tableSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          tableSortKey = nextSortKey;
+          tableSortDirection = 'asc';
+        }
+
+        tableCurrentPage = 1;
+        renderProductTable_();
+      }
+
       function getFilteredProductsForTable_() {
         const keyword = safeText_(document.getElementById('search').value).toLowerCase();
         const categoryFilter = safeText_(document.getElementById('tableCategoryFilter').value).toLowerCase();
@@ -739,6 +846,61 @@
           );
           const categoryMatch = !categoryFilter || safeText_(item.kategori).toLowerCase() === categoryFilter;
           return keywordMatch && categoryMatch;
+        });
+      }
+
+      function sortProductRows_(rows) {
+        const items = Array.isArray(rows) ? rows.slice() : [];
+        const numericSortKeys = {
+          hargaModal: true,
+          hargaJual: true,
+          stokAwal: true,
+          stokAkhir: true,
+          stokMinimum: true,
+        };
+        const isNumeric = !!numericSortKeys[tableSortKey];
+        const multiplier = tableSortDirection === 'desc' ? -1 : 1;
+
+        items.sort(function (a, b) {
+          const aVal = a ? a[tableSortKey] : '';
+          const bVal = b ? b[tableSortKey] : '';
+
+          let diff = 0;
+          if (isNumeric) {
+            diff = Number(aVal || 0) - Number(bVal || 0);
+          } else {
+            diff = safeText_(aVal).localeCompare(safeText_(bVal), 'id', {
+              sensitivity: 'base',
+              numeric: true,
+            });
+          }
+
+          if (diff !== 0) {
+            return diff * multiplier;
+          }
+
+          return safeText_(a && a.sku).localeCompare(safeText_(b && b.sku), 'id', {
+            sensitivity: 'base',
+            numeric: true,
+          });
+        });
+
+        return items;
+      }
+
+      function updateTableSortUi_() {
+        document.querySelectorAll('th.sortable[data-sort-key]').forEach(function (th) {
+          const key = safeText_(th.getAttribute('data-sort-key'));
+          const indicator = th.querySelector('.sort-indicator');
+          if (!indicator) {
+            return;
+          }
+
+          if (key === tableSortKey) {
+            indicator.textContent = tableSortDirection === 'desc' ? 'v' : '^';
+          } else {
+            indicator.textContent = '-';
+          }
         });
       }
 
@@ -789,13 +951,14 @@
 
       function renderProductTable_() {
         const tbody = document.getElementById('productTableBody');
-        const rows = getFilteredProductsForTable_();
+        const rows = sortProductRows_(getFilteredProductsForTable_());
         const totalRows = rows.length;
         const totalPages = Math.max(1, Math.ceil(totalRows / TABLE_PAGE_SIZE));
         tableCurrentPage = Math.min(Math.max(1, tableCurrentPage), totalPages);
         const startIdx = totalRows ? (tableCurrentPage - 1) * TABLE_PAGE_SIZE : 0;
         const endIdx = totalRows ? Math.min(startIdx + TABLE_PAGE_SIZE, totalRows) : 0;
         const pageRows = rows.slice(startIdx, endIdx);
+        updateTableSortUi_();
 
         tbody.innerHTML = '';
         if (!pageRows.length) {
@@ -1350,6 +1513,9 @@
         document.getElementById('formCategoryFilter').disabled = isLoading;
         document.getElementById('search').disabled = isLoading;
         document.getElementById('tableCategoryFilter').disabled = isLoading;
+        document.querySelectorAll('.th-sort-btn').forEach(function (btn) {
+          btn.disabled = isLoading;
+        });
         if (isLoading) {
           document.getElementById('btnTablePrev').disabled = true;
           document.getElementById('btnTableNext').disabled = true;
