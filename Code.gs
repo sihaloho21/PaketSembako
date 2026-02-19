@@ -463,7 +463,12 @@ function executeApiAction_(action, method, e) {
     if (action === 'delete-product' || action === 'product-delete') {
       return deleteProductItem(payload || {});
     }
-    if (action === 'save-products-batch' || action === 'upsert-products-batch' || action === 'products-batch-upsert') {
+    if (
+      action === 'save-products-batch' ||
+      action === 'save-product-batch' ||
+      action === 'upsert-products-batch' ||
+      action === 'products-batch-upsert'
+    ) {
       return saveProductBatch(payload || {});
     }
     if (action === 'sync-recap') {

@@ -730,10 +730,73 @@
             loadProducts('Batch tersimpan. Create: ' + formatNumber(created) + ', Update: ' + formatNumber(updated) + '.');
           },
           function (error) {
+            const message = extractError(error);
+            if (isBatchActionUnsupported_(message)) {
+              saveBatchFallbackOneByOne_(items);
+              return;
+            }
             setLoading(false);
-            setStatus('Gagal simpan batch: ' + extractError(error), true);
+            setStatus('Gagal simpan batch: ' + message, true);
           }
         );
+      }
+
+      function saveBatchFallbackOneByOne_(items) {
+        const rows = Array.isArray(items) ? items : [];
+        if (!rows.length) {
+          setLoading(false);
+          setStatus('Fallback batch gagal: data kosong.', true);
+          return;
+        }
+
+        setStatus('Endpoint batch belum tersedia. Fallback simpan per item sedang berjalan...', false);
+
+        let index = 0;
+        let created = 0;
+        let updated = 0;
+        const failures = [];
+
+        function next() {
+          if (index >= rows.length) {
+            document.getElementById('bulkInput').value = '';
+            if (failures.length) {
+              setLoading(false);
+              setStatus(
+                'Batch fallback selesai dengan kegagalan: ' + failures.length + ' baris. Contoh: ' + failures[0],
+                true
+              );
+              return;
+            }
+            loadProducts(
+              'Batch tersimpan via fallback. Create: ' + formatNumber(created) + ', Update: ' + formatNumber(updated) + '.'
+            );
+            return;
+          }
+
+          const currentRowNumber = index + 1;
+          const item = rows[index];
+          index += 1;
+
+          callBackend_(
+            'saveProductItem',
+            item,
+            function (res) {
+              const action = safeText_(res && res.action).toLowerCase();
+              if (action === 'created') {
+                created += 1;
+              } else {
+                updated += 1;
+              }
+              next();
+            },
+            function (error) {
+              failures.push('Baris ' + currentRowNumber + ': ' + extractError(error));
+              next();
+            }
+          );
+        }
+
+        next();
       }
 
       function collectSingleFormPayload_() {
@@ -836,6 +899,14 @@
       function shouldForceDeleteRetry_(message) {
         const text = safeText_(message).toLowerCase();
         return text.indexOf('forcedelete') > -1 || text.indexOf('histori') > -1 || text.indexOf('dipakai') > -1;
+      }
+
+      function isBatchActionUnsupported_(message) {
+        const text = safeText_(message).toLowerCase();
+        return text.indexOf('action post tidak dikenal: save-products-batch') > -1 ||
+          text.indexOf('action post tidak dikenal: save-product-batch') > -1 ||
+          text.indexOf('action post tidak dikenal: upsert-products-batch') > -1 ||
+          text.indexOf('fungsi backend tidak dikenali: saveproductbatch') > -1;
       }
 
       function renderWarnings_(warnings) {
