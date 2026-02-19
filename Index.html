@@ -56,7 +56,7 @@
 
       .actions {
         display: grid;
-        grid-template-columns: repeat(3, minmax(140px, 1fr));
+        grid-template-columns: repeat(4, minmax(140px, 1fr));
         gap: 10px;
         margin-top: 14px;
       }
@@ -177,10 +177,11 @@
     <main class="container">
       <section class="hero">
         <h1>Paket Sembako</h1>
-        <p>Halaman utama web app untuk akses Kasir, Dashboard, dan status koneksi data spreadsheet.</p>
+        <p>Halaman utama web app untuk akses Kasir, Manajemen Produk, Dashboard, dan status koneksi data spreadsheet.</p>
 
         <div class="actions">
           <button id="btnKasir" class="btn btn-primary">Buka Kasir</button>
+          <button id="btnProduk" class="btn">Manajemen Produk</button>
           <button id="btnDashboard" class="btn btn-secondary">Buka Dashboard</button>
           <button id="btnRefresh" class="btn">Refresh Status</button>
         </div>
@@ -227,6 +228,10 @@
       function init() {
         document.getElementById('btnKasir').addEventListener('click', function () {
           navigateToView_('kasir');
+        });
+
+        document.getElementById('btnProduk').addEventListener('click', function () {
+          navigateToView_('produk');
         });
 
         document.getElementById('btnDashboard').addEventListener('click', function () {
@@ -329,7 +334,12 @@
           return;
         }
 
-        const fileName = view === 'kasir' ? 'Kasir.html' : 'Dashboard.html';
+        let fileName = 'Dashboard.html';
+        if (view === 'kasir') {
+          fileName = 'Kasir.html';
+        } else if (view === 'produk') {
+          fileName = 'Produk.html';
+        }
         const url = new URL(fileName, window.location.href);
         if (API_BASE) {
           url.searchParams.set('apiBase', API_BASE);

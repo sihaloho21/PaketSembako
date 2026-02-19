@@ -14,6 +14,7 @@ const APP_CONFIG = {
   menuDashboard: 'Dashboard',
   titleIndex: 'Paket Sembako',
   titleKasir: 'Form Kasir',
+  titleProduk: 'Manajemen Produk',
   titleDashboard: 'Dashboard Penjualan',
   cachePrefix: 'dashboard:data:v',
   cacheVersionKey: 'dashboard_version',
@@ -136,6 +137,7 @@ function onOpen() {
     .createMenu(APP_CONFIG.menuKasir)
     .addItem('Buka Kasir (Sidebar)', 'showKasirSidebar')
     .addItem('Buka Kasir (Modal)', 'showKasirModal')
+    .addItem('Buka Manajemen Produk', 'showProductManagerModal')
     .addSeparator()
     .addItem('Input Stok Masuk', 'inputStockMasuk')
     .addItem('Input Retur Barang', 'inputStockRetur')
@@ -181,6 +183,17 @@ function showKasirModal() {
     .setWidth(520)
     .setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, APP_CONFIG.titleKasir);
+}
+
+/**
+ * Menampilkan manajemen produk dalam modal dialog.
+ */
+function showProductManagerModal() {
+  const html = HtmlService.createHtmlOutputFromFile('Produk')
+    .setTitle(APP_CONFIG.titleProduk)
+    .setWidth(1180)
+    .setHeight(760);
+  SpreadsheetApp.getUi().showModalDialog(html, APP_CONFIG.titleProduk);
 }
 
 /**
@@ -312,8 +325,9 @@ function showDashboardSidebar() {
  * Endpoint Web App + API:
  * - default: index
  * - ?view=kasir: kasir
+ * - ?view=produk: manajemen produk
  * - ?view=dashboard: dashboard
- * - ?action=status|kasir-options|dashboard-data|low-stock-alerts (JSON GET API)
+ * - ?action=status|kasir-options|product-crud-data|dashboard-data|low-stock-alerts (JSON GET API)
  */
 function doGet(e) {
   if (isApiRequest_(e)) {
@@ -332,6 +346,8 @@ function doGet(e) {
   let template = 'Index';
   if (view === 'kasir') {
     template = 'Kasir';
+  } else if (view === 'produk') {
+    template = 'Produk';
   } else if (view === 'dashboard') {
     template = 'Dashboard';
   }
@@ -339,6 +355,8 @@ function doGet(e) {
   let title = APP_CONFIG.titleIndex;
   if (template === 'Kasir') {
     title = APP_CONFIG.titleKasir;
+  } else if (template === 'Produk') {
+    title = APP_CONFIG.titleProduk;
   } else if (template === 'Dashboard') {
     title = APP_CONFIG.titleDashboard;
   }
@@ -355,6 +373,8 @@ function doGet(e) {
  * body: {"customerName":"Budi","sku":"BRS-001","qty":2,"note":""}
  * POST .../exec?action=save-stock-mutation
  * body: {"type":"MASUK","sku":"BRS-001","qty":10,"note":"Restok"}
+ * POST .../exec?action=save-product
+ * body: {"sku":"BRS-003","kategori":"Beras","namaProduk":"Beras 2kg","hargaModal":25000,"satuan":"sak","hargaJual":30000,"stokAwal":50,"stokMinimum":10}
  */
 function doPost(e) {
   return handleApiRequest_(e, 'POST');
@@ -415,6 +435,9 @@ function executeApiAction_(action, method, e) {
     if (action === 'kasir-options') {
       return getKasirOptions();
     }
+    if (action === 'product-crud-data' || action === 'products-data' || action === 'product-data') {
+      return getProductCrudData();
+    }
     if (action === 'dashboard-data') {
       return getDashboardData(toBoolean_(e && e.parameter && e.parameter.forceRefresh));
     }
@@ -433,6 +456,15 @@ function executeApiAction_(action, method, e) {
     }
     if (action === 'save-stock-mutation' || action === 'stock-mutation') {
       return saveStockMutation(payload || {});
+    }
+    if (action === 'save-product' || action === 'upsert-product' || action === 'product-upsert') {
+      return saveProductItem(payload || {});
+    }
+    if (action === 'delete-product' || action === 'product-delete') {
+      return deleteProductItem(payload || {});
+    }
+    if (action === 'save-products-batch' || action === 'upsert-products-batch' || action === 'products-batch-upsert') {
+      return saveProductBatch(payload || {});
     }
     if (action === 'sync-recap') {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -705,6 +737,354 @@ function getKasirOptions() {
       minMarginPercent: APP_CONFIG.minMarginPercent,
     },
   };
+}
+
+/**
+ * Endpoint data produk untuk UI CRUD manajemen barang.
+ */
+function getProductCrudData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureCoreSheets_(ss);
+
+  const warnings = [];
+  const state = collectBusinessState_(ss, warnings);
+  const alerts = buildProductAlerts_(state.products);
+
+  const items = state.products
+    .map((item) => ({
+      rowNumber: item.rowNumber,
+      sku: item.sku,
+      kategori: item.kategori || 'Umum',
+      namaProduk: item.namaProduk,
+      satuan: item.satuan || 'pcs',
+      hargaModal: round2_(item.hargaModal),
+      hargaJual: round2_(item.hargaJual),
+      stokAwal: round2_(item.stokAwal),
+      stokAkhir: round2_(item.stockCalculated),
+      stokMinimum: round2_(item.stokMinimum),
+      modal: round2_(item.stokAwal * item.hargaModal),
+      marginPercent: calcMarginPercent_(item.hargaJual, item.hargaModal),
+    }))
+    .sort((a, b) => a.namaProduk.localeCompare(b.namaProduk));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    total: items.length,
+    items: items,
+    summary: {
+      totalProduk: items.length,
+      totalLowStock: alerts.lowStockItems.length,
+      totalPricingAlerts: alerts.pricingItems.length,
+    },
+    lowStockItems: alerts.lowStockItems,
+    pricingAlerts: alerts.pricingItems,
+    warnings: warnings.concat(alerts.lowStockWarnings, alerts.pricingWarnings),
+  };
+}
+
+/**
+ * Create / update 1 produk berdasarkan SKU.
+ * Jika SKU sudah ada maka update, jika belum ada maka create.
+ */
+function saveProductItem(payload) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureCoreSheets_(ss);
+
+    const result = upsertProductRows_(ss, [payload || {}], { allowEmpty: false });
+    const recap = rebuildRecapAndStock_(ss);
+    bumpDashboardVersion_();
+
+    return {
+      success: true,
+      action: result.items[0] ? result.items[0].action : 'updated',
+      product: result.items[0] || null,
+      createdCount: result.createdCount,
+      updatedCount: result.updatedCount,
+      recap: recap,
+      warnings: (result.warnings || []).concat(recap.warnings || []),
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Batch create / update produk dari array items.
+ * @param {{items:Array<Object>}} payload
+ */
+function saveProductBatch(payload) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureCoreSheets_(ss);
+
+    const items = Array.isArray(payload && payload.items) ? payload.items : [];
+    if (!items.length) {
+      throw new Error('Data batch kosong. Tambahkan minimal 1 baris produk.');
+    }
+
+    const result = upsertProductRows_(ss, items, { allowEmpty: false });
+    const recap = rebuildRecapAndStock_(ss);
+    bumpDashboardVersion_();
+
+    return {
+      success: true,
+      totalInput: items.length,
+      createdCount: result.createdCount,
+      updatedCount: result.updatedCount,
+      items: result.items,
+      recap: recap,
+      warnings: (result.warnings || []).concat(recap.warnings || []),
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Hapus produk berdasarkan SKU.
+ * Jika SKU sudah dipakai pada transaksi/mutasi, wajib forceDelete=true.
+ */
+function deleteProductItem(payload) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureCoreSheets_(ss);
+
+    const skuInput = safeText_(payload && payload.sku);
+    const forceDelete = toBoolean_(payload && payload.forceDelete);
+    if (!skuInput) {
+      throw new Error('SKU wajib diisi untuk hapus produk.');
+    }
+
+    const warnings = [];
+    const state = collectBusinessState_(ss, warnings);
+    const skuKey = normalizeSku_(skuInput);
+    const product = state.productsBySku[skuKey];
+    if (!product) {
+      throw new Error('SKU tidak ditemukan pada sheet PRODUK: ' + skuInput);
+    }
+
+    const salesRefCount = state.sales.filter((row) => row.skuKey === skuKey).length;
+    const mutationRefCount = state.mutations.filter((row) => row.skuKey === skuKey).length;
+    if ((salesRefCount > 0 || mutationRefCount > 0) && !forceDelete) {
+      throw new Error(
+        'SKU sudah dipakai di ' + salesRefCount + ' baris penjualan dan ' + mutationRefCount +
+        ' baris mutasi. Ulangi dengan forceDelete=true jika tetap ingin menghapus.'
+      );
+    }
+
+    if (!state.productsContext.sheet) {
+      throw new Error('Sheet PRODUK tidak ditemukan.');
+    }
+
+    state.productsContext.sheet.deleteRow(product.rowNumber);
+
+    const recap = rebuildRecapAndStock_(ss);
+    bumpDashboardVersion_();
+
+    return {
+      success: true,
+      deletedSku: product.sku,
+      namaProduk: product.namaProduk,
+      references: {
+        penjualan: salesRefCount,
+        mutasi: mutationRefCount,
+      },
+      forceDelete: forceDelete,
+      recap: recap,
+      warnings: warnings.concat(recap.warnings || []),
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Upsert baris produk ke sheet PRODUK.
+ */
+function upsertProductRows_(ss, inputItems, options) {
+  const opts = options || {};
+  const warnings = [];
+  const ctx = getSheetContext_(ss, APP_CONFIG.sheets.PRODUK, warnings);
+  if (!ctx.sheet) {
+    throw new Error('Sheet PRODUK tidak ditemukan.');
+  }
+
+  const cols = resolveColumns_(ctx.headers, {
+    sku: FIELD_ALIASES.sku,
+    kategori: FIELD_ALIASES.kategori,
+    namaProduk: FIELD_ALIASES.namaProduk,
+    hargaModal: FIELD_ALIASES.hargaModal,
+    satuan: FIELD_ALIASES.satuan,
+    hargaJual: FIELD_ALIASES.hargaJual,
+    stokAwal: FIELD_ALIASES.stokAwal,
+    stokAkhir: FIELD_ALIASES.stokAkhir,
+    modal: FIELD_ALIASES.modal,
+    stokMinimum: FIELD_ALIASES.stokMinimum,
+  });
+
+  ensureRequiredColumns_(
+    cols,
+    ['sku', 'namaProduk', 'hargaModal', 'satuan', 'hargaJual', 'stokAwal', 'stokAkhir', 'modal', 'stokMinimum'],
+    APP_CONFIG.sheets.PRODUK
+  );
+
+  const normalizedItems = (inputItems || []).map((item, idx) => normalizeProductPayloadItem_(item, idx));
+  if (!normalizedItems.length && !opts.allowEmpty) {
+    throw new Error('Tidak ada data produk untuk disimpan.');
+  }
+
+  const existingBySku = {};
+  ctx.rows.forEach((row) => {
+    const sku = safeText_(row.values[cols.sku]);
+    if (!sku) {
+      return;
+    }
+    existingBySku[normalizeSku_(sku)] = {
+      rowNumber: row.rowNumber,
+      values: row.values,
+    };
+  });
+
+  const rowLength = Math.max(ctx.headers.length, SHEET_HEADERS.PRODUK.length);
+  const updates = [];
+  const newRows = [];
+  const seenInputSku = {};
+  const savedItems = [];
+
+  normalizedItems.forEach((item) => {
+    if (seenInputSku[item.skuKey]) {
+      throw new Error('SKU duplikat pada input batch: ' + item.sku);
+    }
+    seenInputSku[item.skuKey] = true;
+
+    const existing = existingBySku[item.skuKey];
+    const rowValues = existing
+      ? padRowToLength_(existing.values, rowLength)
+      : new Array(rowLength).fill('');
+
+    assignRowValue_(rowValues, cols.sku, item.sku);
+    assignRowValue_(rowValues, cols.kategori, item.kategori);
+    assignRowValue_(rowValues, cols.namaProduk, item.namaProduk);
+    assignRowValue_(rowValues, cols.hargaModal, item.hargaModal);
+    assignRowValue_(rowValues, cols.satuan, item.satuan);
+    assignRowValue_(rowValues, cols.hargaJual, item.hargaJual);
+    assignRowValue_(rowValues, cols.stokAwal, item.stokAwal);
+    assignRowValue_(rowValues, cols.stokAkhir, item.hasStokAkhir ? item.stokAkhir : item.stokAwal);
+    assignRowValue_(rowValues, cols.modal, round2_(item.stokAwal * item.hargaModal));
+    assignRowValue_(rowValues, cols.stokMinimum, item.stokMinimum);
+
+    if (existing) {
+      updates.push({ rowNumber: existing.rowNumber, values: rowValues });
+    } else {
+      newRows.push(rowValues);
+    }
+
+    savedItems.push({
+      action: existing ? 'updated' : 'created',
+      sku: item.sku,
+      kategori: item.kategori,
+      namaProduk: item.namaProduk,
+      satuan: item.satuan,
+      hargaModal: item.hargaModal,
+      hargaJual: item.hargaJual,
+      stokAwal: item.stokAwal,
+      stokMinimum: item.stokMinimum,
+      stokAkhir: item.hasStokAkhir ? item.stokAkhir : item.stokAwal,
+    });
+  });
+
+  updates.forEach((entry) => {
+    ctx.sheet.getRange(entry.rowNumber, 1, 1, rowLength).setValues([entry.values]);
+  });
+
+  if (newRows.length) {
+    const startRow = ctx.sheet.getLastRow() + 1;
+    ctx.sheet.getRange(startRow, 1, newRows.length, rowLength).setValues(newRows);
+  }
+
+  return {
+    createdCount: newRows.length,
+    updatedCount: updates.length,
+    items: savedItems,
+    warnings: warnings,
+  };
+}
+
+/**
+ * Validasi dan normalisasi 1 payload produk.
+ */
+function normalizeProductPayloadItem_(payload, index) {
+  const idx = Number(index || 0) + 1;
+  const sku = normalizeSku_(payload && payload.sku);
+  const namaProduk = safeText_(payload && payload.namaProduk);
+  const kategori = safeText_(payload && payload.kategori) || 'Umum';
+  const satuan = safeText_(payload && payload.satuan) || 'pcs';
+  const hargaModal = round2_(toNumber_(payload && payload.hargaModal));
+  const hargaJual = round2_(toNumber_(payload && payload.hargaJual));
+  const stokAwal = round2_(toNumber_(payload && payload.stokAwal));
+  const stokMinimum = round2_(toNumber_(payload && payload.stokMinimum));
+
+  const hasStokAkhir = payload && payload.stokAkhir !== undefined && payload.stokAkhir !== null &&
+    safeText_(payload.stokAkhir) !== '';
+  const stokAkhir = hasStokAkhir ? round2_(toNumber_(payload.stokAkhir)) : 0;
+
+  if (!sku) {
+    throw new Error('SKU item ke-' + idx + ' wajib diisi.');
+  }
+  if (!namaProduk) {
+    throw new Error('Nama produk item ke-' + idx + ' wajib diisi.');
+  }
+  if (hargaModal < 0) {
+    throw new Error('Harga modal item ke-' + idx + ' tidak boleh negatif.');
+  }
+  if (hargaJual < 0) {
+    throw new Error('Harga jual item ke-' + idx + ' tidak boleh negatif.');
+  }
+  if (stokAwal < 0) {
+    throw new Error('Stok awal item ke-' + idx + ' tidak boleh negatif.');
+  }
+  if (stokMinimum < 0) {
+    throw new Error('Stok minimum item ke-' + idx + ' tidak boleh negatif.');
+  }
+  if (hasStokAkhir && stokAkhir < 0) {
+    throw new Error('Stok akhir item ke-' + idx + ' tidak boleh negatif.');
+  }
+
+  return {
+    sku: sku,
+    skuKey: sku,
+    kategori: kategori,
+    namaProduk: namaProduk,
+    satuan: satuan,
+    hargaModal: hargaModal,
+    hargaJual: hargaJual,
+    stokAwal: stokAwal,
+    stokMinimum: stokMinimum,
+    hasStokAkhir: hasStokAkhir,
+    stokAkhir: stokAkhir,
+  };
+}
+
+/**
+ * Pad array row ke panjang tertentu.
+ */
+function padRowToLength_(row, targetLength) {
+  const out = new Array(Math.max(0, targetLength)).fill('');
+  const source = Array.isArray(row) ? row : [];
+  for (let i = 0; i < out.length && i < source.length; i += 1) {
+    out[i] = source[i];
+  }
+  return out;
 }
 
 /**
