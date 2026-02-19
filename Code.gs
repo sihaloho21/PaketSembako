@@ -18,6 +18,7 @@ const APP_CONFIG = {
   titleDashboard: 'Dashboard Penjualan',
   cachePrefix: 'dashboard:data:v',
   cacheVersionKey: 'dashboard_version',
+  salesSnapshotBackfillRowKey: 'penjualan_snapshot_backfill_last_row',
   cacheTtlSeconds: 45,
   chartItemLimit: 20,
   pieItemLimit: 10,
@@ -56,6 +57,9 @@ const SHEET_HEADERS = {
     'Qty',
     'Total (Rp)',
     'Catatan',
+    'Harga Modal Satuan (Rp)',
+    'HPP (Rp)',
+    'Laba Kotor (Rp)',
   ],
   MUTASI_STOK: [
     'Tanggal',
@@ -103,6 +107,15 @@ const FIELD_ALIASES = {
   jenisMutasi: ['jenis mutasi', 'tipe mutasi', 'type mutasi', 'jenis', 'type'],
   pelanggan: ['nama pelanggan', 'pelanggan', 'customer', 'pembeli', 'client'],
   hargaSatuan: ['harga satuan (rp)', 'harga satuan', 'harga', 'price'],
+  hargaModalTransaksi: [
+    'harga modal satuan (rp)',
+    'harga modal satuan',
+    'harga modal transaksi (rp)',
+    'harga modal transaksi',
+    'modal transaksi',
+    'hpp unit transaksi',
+    'hpp unit',
+  ],
   qty: ['qty', 'jumlah', 'kuantitas', 'quantity'],
   total: ['total (rp)', 'total', 'omzet', 'grand total', 'nilai transaksi'],
   catatan: ['catatan', 'note', 'keterangan'],
@@ -1139,8 +1152,11 @@ function saveKasirTransaction(payload) {
       namaProduk: FIELD_ALIASES.namaProduk,
       satuan: FIELD_ALIASES.satuan,
       hargaSatuan: FIELD_ALIASES.hargaSatuan,
+      hargaModalTransaksi: FIELD_ALIASES.hargaModalTransaksi,
       qty: FIELD_ALIASES.qty,
       total: FIELD_ALIASES.total,
+      hpp: FIELD_ALIASES.hpp,
+      labaKotor: FIELD_ALIASES.labaKotor,
       catatan: FIELD_ALIASES.catatan,
     });
 
@@ -1168,7 +1184,10 @@ function saveKasirTransaction(payload) {
       }
 
       const hargaSatuan = round2_(product.hargaJual);
+      const hargaModalSatuan = round2_(product.hargaModal);
       const total = round2_(hargaSatuan * round2_(item.qty));
+      const hpp = round2_(round2_(item.qty) * hargaModalSatuan);
+      const labaKotor = round2_(total - hpp);
 
       return {
         sku: product.sku,
@@ -1177,7 +1196,10 @@ function saveKasirTransaction(payload) {
         satuan: product.satuan,
         qty: round2_(item.qty),
         hargaSatuan: hargaSatuan,
+        hargaModalSatuan: hargaModalSatuan,
         total: total,
+        hpp: hpp,
+        labaKotor: labaKotor,
         note: safeText_(item.note) || invoiceNote,
         stokSisa: round2_(availableStock - requestedQty),
       };
@@ -1195,8 +1217,11 @@ function saveKasirTransaction(payload) {
       assignRowValue_(newRow, salesCols.namaProduk, item.namaProduk);
       assignRowValue_(newRow, salesCols.satuan, item.satuan);
       assignRowValue_(newRow, salesCols.hargaSatuan, item.hargaSatuan);
+      assignRowValue_(newRow, salesCols.hargaModalTransaksi, item.hargaModalSatuan);
       assignRowValue_(newRow, salesCols.qty, item.qty);
       assignRowValue_(newRow, salesCols.total, item.total);
+      assignRowValue_(newRow, salesCols.hpp, item.hpp);
+      assignRowValue_(newRow, salesCols.labaKotor, item.labaKotor);
       assignRowValue_(newRow, salesCols.catatan, item.note);
       return newRow;
     });
@@ -1232,7 +1257,10 @@ function saveKasirTransaction(payload) {
           namaProduk: item.namaProduk,
           qty: item.qty,
           hargaSatuan: item.hargaSatuan,
+          hargaModalSatuan: item.hargaModalSatuan,
           total: item.total,
+          hpp: item.hpp,
+          labaKotor: item.labaKotor,
           stokSisa: item.stokSisa,
         })),
       },
@@ -1402,18 +1430,36 @@ function rebuildRecapAndStock_(ss) {
 
   syncProductStockColumns_(state);
 
+  const salesAggBySku = {};
+  state.sales.forEach((row) => {
+    const skuKey = row.skuKey;
+    if (!salesAggBySku[skuKey]) {
+      salesAggBySku[skuKey] = {
+        qty: 0,
+        omzet: 0,
+        hpp: 0,
+      };
+    }
+    salesAggBySku[skuKey].qty = round2_(salesAggBySku[skuKey].qty + row.qty);
+    salesAggBySku[skuKey].omzet = round2_(salesAggBySku[skuKey].omzet + row.total);
+    salesAggBySku[skuKey].hpp = round2_(salesAggBySku[skuKey].hpp + row.hpp);
+  });
+
   const rekapProdukRows = state.products
     .map((item) => {
-      const qtyTerjual = round2_(state.soldBySku[item.skuKey] || 0);
-      const omzet = round2_(qtyTerjual * item.hargaJual);
-      const hpp = round2_(qtyTerjual * item.hargaModal);
+      const aggr = salesAggBySku[item.skuKey] || { qty: 0, omzet: 0, hpp: 0 };
+      const qtyTerjual = round2_(aggr.qty);
+      const omzet = round2_(aggr.omzet);
+      const hpp = round2_(aggr.hpp);
       const labaKotor = round2_(omzet - hpp);
+      const hargaModalAvg = qtyTerjual ? round2_(hpp / qtyTerjual) : round2_(item.hargaModal);
+      const hargaJualAvg = qtyTerjual ? round2_(omzet / qtyTerjual) : round2_(item.hargaJual);
       return [
         item.sku,
         item.namaProduk,
         item.satuan,
-        round2_(item.hargaModal),
-        round2_(item.hargaJual),
+        hargaModalAvg,
+        hargaJualAvg,
         qtyTerjual,
         omzet,
         hpp,
@@ -1726,6 +1772,8 @@ function ensureCoreSheets_(ss, options) {
   ensureProdukMinimumStockColumn_(ss, messages);
   ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.PENJUALAN, SHEET_HEADERS.PENJUALAN, messages);
   ensurePenjualanInvoiceColumn_(ss, messages);
+  ensurePenjualanHistoricalColumns_(ss, messages);
+  backfillPenjualanSnapshotRows_(ss, messages);
   ensureSheetExistsWithHeader_(ss, APP_CONFIG.sheets.MUTASI_STOK, SHEET_HEADERS.MUTASI_STOK, messages);
   ensureSheetExistsWithHeader_(
     ss,
@@ -1794,6 +1842,209 @@ function ensurePenjualanInvoiceColumn_(ss, messages) {
   }
   sheet.getRange(1, targetCol).setValue(SHEET_HEADERS.PENJUALAN[1]);
   messages.push('Menambahkan kolom invoice pada sheet ' + APP_CONFIG.sheets.PENJUALAN);
+}
+
+/**
+ * Pastikan sheet PENJUALAN memiliki kolom snapshot harga/modal per transaksi.
+ * Kolom ditambahkan di ujung agar kompatibel dengan data lama.
+ */
+function ensurePenjualanHistoricalColumns_(ss, messages) {
+  const sheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+  if (!sheet) {
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const readCols = Math.max(lastCol, 1);
+  const headers = sheet.getRange(1, 1, 1, readCols).getValues()[0].map((cell) => safeText_(cell));
+  const cols = resolveColumns_(headers, {
+    hargaModalTransaksi: FIELD_ALIASES.hargaModalTransaksi,
+    hpp: FIELD_ALIASES.hpp,
+    labaKotor: FIELD_ALIASES.labaKotor,
+  });
+
+  const missing = [];
+  if (cols.hargaModalTransaksi < 0) {
+    missing.push('Harga Modal Satuan (Rp)');
+  }
+  if (cols.hpp < 0) {
+    missing.push('HPP (Rp)');
+  }
+  if (cols.labaKotor < 0) {
+    missing.push('Laba Kotor (Rp)');
+  }
+
+  if (!missing.length) {
+    return;
+  }
+
+  const targetLastCol = readCols + missing.length;
+  if (sheet.getMaxColumns() < targetLastCol) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), targetLastCol - sheet.getMaxColumns());
+  }
+
+  missing.forEach((header, idx) => {
+    sheet.getRange(1, readCols + idx + 1).setValue(header);
+  });
+
+  messages.push('Menambahkan kolom snapshot harga/modal pada sheet ' + APP_CONFIG.sheets.PENJUALAN);
+}
+
+/**
+ * Lengkapi snapshot harga jual + modal pada baris PENJUALAN yang belum memiliki nilai.
+ * Proses incremental memakai property row terakhir agar tidak membebani setiap request.
+ */
+function backfillPenjualanSnapshotRows_(ss, messages) {
+  const sheet = findSheetByName_(ss, APP_CONFIG.sheets.PENJUALAN);
+  if (!sheet) {
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return;
+  }
+
+  const props = PropertiesService.getDocumentProperties();
+  let lastProcessedRow = Number(props.getProperty(APP_CONFIG.salesSnapshotBackfillRowKey) || '1');
+  if (!Number.isFinite(lastProcessedRow) || lastProcessedRow < 1) {
+    lastProcessedRow = 1;
+  }
+  if (lastProcessedRow > lastRow) {
+    // Jika sheet sempat dibersihkan, proses ulang dari awal data.
+    lastProcessedRow = 1;
+  }
+
+  const startRow = Math.max(2, lastProcessedRow + 1);
+  if (startRow > lastRow) {
+    props.setProperty(APP_CONFIG.salesSnapshotBackfillRowKey, String(lastRow));
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  if (!lastCol) {
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map((cell) => safeText_(cell));
+  const cols = resolveColumns_(headers, {
+    sku: FIELD_ALIASES.sku,
+    qty: FIELD_ALIASES.qty,
+    hargaSatuan: FIELD_ALIASES.hargaSatuan,
+    total: FIELD_ALIASES.total,
+    hargaModalTransaksi: FIELD_ALIASES.hargaModalTransaksi,
+    hpp: FIELD_ALIASES.hpp,
+    labaKotor: FIELD_ALIASES.labaKotor,
+  });
+
+  const required = ['sku', 'qty', 'hargaSatuan', 'total', 'hargaModalTransaksi', 'hpp', 'labaKotor'];
+  if (required.some((field) => !(cols[field] > -1))) {
+    props.setProperty(APP_CONFIG.salesSnapshotBackfillRowKey, String(lastRow));
+    return;
+  }
+
+  const productsContext = getSheetContext_(ss, APP_CONFIG.sheets.PRODUK, []);
+  const productPricesBySku = {};
+
+  if (productsContext.sheet) {
+    const pCols = resolveColumns_(productsContext.headers, {
+      sku: FIELD_ALIASES.sku,
+      hargaModal: FIELD_ALIASES.hargaModal,
+      hargaJual: FIELD_ALIASES.hargaJual,
+    });
+
+    productsContext.rows.forEach((item) => {
+      const raw = item.values;
+      const skuKey = normalizeSku_(raw[pCols.sku]);
+      if (!skuKey) {
+        return;
+      }
+      productPricesBySku[skuKey] = {
+        hargaModal: round2_(toNumber_(raw[pCols.hargaModal])),
+        hargaJual: round2_(toNumber_(raw[pCols.hargaJual])),
+      };
+    });
+  }
+
+  const hasValue = function (value) {
+    return !(value === '' || value === null || value === undefined);
+  };
+
+  const rowCount = lastRow - startRow + 1;
+  const values = sheet.getRange(startRow, 1, rowCount, lastCol).getValues();
+  const updates = [];
+
+  values.forEach((row, idx) => {
+    if (!row.some((cell) => hasValue(cell))) {
+      return;
+    }
+
+    const qty = round2_(toNumber_(row[cols.qty]));
+    if (!qty || qty <= 0) {
+      return;
+    }
+
+    const skuKey = normalizeSku_(row[cols.sku]);
+    const product = productPricesBySku[skuKey] || { hargaModal: 0, hargaJual: 0 };
+    let changed = false;
+
+    let hargaSatuan = round2_(toNumber_(row[cols.hargaSatuan]));
+    let total = round2_(toNumber_(row[cols.total]));
+    const hasHargaSatuan = hasValue(row[cols.hargaSatuan]);
+    const hasTotal = hasValue(row[cols.total]);
+
+    if (!hasHargaSatuan && hasTotal && qty) {
+      hargaSatuan = round2_(total / qty);
+      row[cols.hargaSatuan] = hargaSatuan;
+      changed = true;
+    } else if (!hasHargaSatuan && !hasTotal) {
+      hargaSatuan = round2_(product.hargaJual);
+      row[cols.hargaSatuan] = hargaSatuan;
+      changed = true;
+    }
+
+    if (!hasTotal) {
+      total = round2_(hargaSatuan * qty);
+      row[cols.total] = total;
+      changed = true;
+    }
+
+    let hargaModalSatuan = round2_(toNumber_(row[cols.hargaModalTransaksi]));
+    if (!hasValue(row[cols.hargaModalTransaksi])) {
+      hargaModalSatuan = round2_(product.hargaModal);
+      row[cols.hargaModalTransaksi] = hargaModalSatuan;
+      changed = true;
+    }
+
+    let hpp = round2_(toNumber_(row[cols.hpp]));
+    if (!hasValue(row[cols.hpp])) {
+      hpp = round2_(qty * hargaModalSatuan);
+      row[cols.hpp] = hpp;
+      changed = true;
+    }
+
+    if (!hasValue(row[cols.labaKotor])) {
+      row[cols.labaKotor] = round2_(total - hpp);
+      changed = true;
+    }
+
+    if (changed) {
+      updates.push({
+        rowNumber: startRow + idx,
+        values: row,
+      });
+    }
+  });
+
+  updates.forEach((entry) => {
+    sheet.getRange(entry.rowNumber, 1, 1, lastCol).setValues([entry.values]);
+  });
+
+  props.setProperty(APP_CONFIG.salesSnapshotBackfillRowKey, String(lastRow));
+
+  if (updates.length) {
+    messages.push('Melengkapi snapshot transaksi PENJUALAN: ' + updates.length + ' baris.');
+  }
 }
 
 /**
@@ -1935,6 +2186,9 @@ function buildDummySalesRows_(products) {
 
     const customer = customers[Math.floor(Math.random() * customers.length)];
     const total = round2_(qty * product.hargaJual);
+    const hargaModalSatuan = round2_(product.hargaModal);
+    const hpp = round2_(qty * hargaModalSatuan);
+    const labaKotor = round2_(total - hpp);
     const note = notes[Math.floor(Math.random() * notes.length)];
     invoiceSeq += 1;
     const invoice = 'INV-DMY-' + String(invoiceSeq).padStart(4, '0');
@@ -1950,6 +2204,9 @@ function buildDummySalesRows_(products) {
       qty,
       total,
       note,
+      hargaModalSatuan,
+      hpp,
+      labaKotor,
     ]);
   }
 
@@ -2147,8 +2404,11 @@ function parseSales_(context, productsBySku, timezone, warnings) {
     namaProduk: FIELD_ALIASES.namaProduk,
     satuan: FIELD_ALIASES.satuan,
     hargaSatuan: FIELD_ALIASES.hargaSatuan,
+    hargaModalTransaksi: FIELD_ALIASES.hargaModalTransaksi,
     qty: FIELD_ALIASES.qty,
     total: FIELD_ALIASES.total,
+    hpp: FIELD_ALIASES.hpp,
+    labaKotor: FIELD_ALIASES.labaKotor,
     catatan: FIELD_ALIASES.catatan,
   });
 
@@ -2174,14 +2434,34 @@ function parseSales_(context, productsBySku, timezone, warnings) {
     const skuKey = normalizeSku_(skuRaw);
     const product = productsBySku[skuKey] || null;
 
+    const hasHargaSatuan = hasCellValue_(raw[columns.hargaSatuan]);
     let hargaSatuan = round2_(toNumber_(raw[columns.hargaSatuan]));
-    if (!hargaSatuan && product) {
+    if (!hasHargaSatuan && product) {
       hargaSatuan = round2_(product.hargaJual);
     }
 
+    const hasTotal = hasCellValue_(raw[columns.total]);
     let total = round2_(toNumber_(raw[columns.total]));
-    if (!total && hargaSatuan) {
+    if (!hasTotal && hargaSatuan) {
       total = round2_(hargaSatuan * qty);
+    }
+
+    const hasHargaModalTransaksi = hasCellValue_(raw[columns.hargaModalTransaksi]);
+    let hargaModalSatuan = round2_(toNumber_(raw[columns.hargaModalTransaksi]));
+    if (!hasHargaModalTransaksi && product) {
+      hargaModalSatuan = round2_(product.hargaModal);
+    }
+
+    const hasHpp = hasCellValue_(raw[columns.hpp]);
+    let hpp = round2_(toNumber_(raw[columns.hpp]));
+    if (!hasHpp) {
+      hpp = round2_(qty * hargaModalSatuan);
+    }
+
+    const hasLabaKotor = hasCellValue_(raw[columns.labaKotor]);
+    let profit = round2_(toNumber_(raw[columns.labaKotor]));
+    if (!hasLabaKotor) {
+      profit = round2_(total - hpp);
     }
 
     const tanggal = toDateOnly_(raw[fallbackDateCol]);
@@ -2191,8 +2471,6 @@ function parseSales_(context, productsBySku, timezone, warnings) {
     const invoiceKey = normalizeInvoice_(invoice);
     const namaProduk = safeText_(raw[columns.namaProduk]) || (product ? product.namaProduk : skuRaw || 'Tanpa SKU');
     const pelanggan = safeText_(raw[columns.pelanggan]) || 'Tanpa Nama';
-    const hpp = round2_(qty * (product ? product.hargaModal : 0));
-    const profit = round2_(total - hpp);
 
     result.push({
       rowNumber: item.rowNumber,
@@ -2206,6 +2484,7 @@ function parseSales_(context, productsBySku, timezone, warnings) {
       namaProduk: namaProduk,
       qty: qty,
       hargaSatuan: hargaSatuan,
+      hargaModalSatuan: hargaModalSatuan,
       total: total,
       hpp: hpp,
       profit: profit,
@@ -2906,6 +3185,13 @@ function bumpDashboardVersion_() {
   const props = PropertiesService.getDocumentProperties();
   const currentVersion = Number(props.getProperty(APP_CONFIG.cacheVersionKey) || '0');
   props.setProperty(APP_CONFIG.cacheVersionKey, String(currentVersion + 1));
+}
+
+/**
+ * Cek apakah cell memiliki nilai (termasuk angka 0).
+ */
+function hasCellValue_(value) {
+  return !(value === '' || value === null || value === undefined);
 }
 
 /**
