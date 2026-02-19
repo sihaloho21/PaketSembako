@@ -384,6 +384,106 @@
         display: none;
       }
 
+      body.sidebar-mode {
+        padding: 8px;
+      }
+
+      body.sidebar-mode .card {
+        border-radius: 14px;
+        padding: 11px;
+        box-shadow: 0 12px 28px rgba(18, 34, 61, 0.1);
+      }
+
+      body.sidebar-mode h1 {
+        font-size: 18px;
+      }
+
+      body.sidebar-mode .sub {
+        font-size: 11px;
+        margin-top: 4px;
+      }
+
+      body.sidebar-mode .summary {
+        margin-top: 10px;
+        gap: 7px;
+        grid-template-columns: 1fr;
+      }
+
+      body.sidebar-mode .summary-box {
+        padding: 8px;
+      }
+
+      body.sidebar-mode .summary-box .v {
+        font-size: 16px;
+      }
+
+      body.sidebar-mode .form {
+        margin-top: 10px;
+        gap: 8px;
+      }
+
+      body.sidebar-mode .grid-2,
+      body.sidebar-mode .product-row,
+      body.sidebar-mode .qty-row,
+      body.sidebar-mode .stock-row,
+      body.sidebar-mode .actions {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      body.sidebar-mode label {
+        font-size: 11px;
+        margin-bottom: 3px;
+      }
+
+      body.sidebar-mode input,
+      body.sidebar-mode select,
+      body.sidebar-mode textarea,
+      body.sidebar-mode button {
+        font-size: 13px;
+        padding: 8px 9px;
+        border-radius: 10px;
+      }
+
+      body.sidebar-mode .product-meta {
+        padding: 8px;
+        gap: 5px;
+      }
+
+      body.sidebar-mode .meta-row {
+        font-size: 12px;
+      }
+
+      body.sidebar-mode th,
+      body.sidebar-mode td {
+        font-size: 12px;
+        padding: 7px 6px;
+      }
+
+      body.sidebar-mode .total-box {
+        padding: 8px;
+      }
+
+      body.sidebar-mode .total-box .v {
+        font-size: 20px;
+      }
+
+      body.sidebar-mode .stock-section {
+        margin-top: 2px;
+        padding: 8px;
+        gap: 8px;
+      }
+
+      body.sidebar-mode .stock-head {
+        font-size: 12px;
+      }
+
+      body.sidebar-mode .status,
+      body.sidebar-mode .warn,
+      body.sidebar-mode .invoice {
+        margin-top: 8px;
+      }
+
       @keyframes rise-in {
         from {
           opacity: 0;
@@ -553,6 +653,9 @@
       const API_BASE = resolveApiBase_();
 
       function init() {
+        applySidebarDensityMode_();
+        window.addEventListener('resize', applySidebarDensityMode_);
+
         document.getElementById('product').addEventListener('change', onProductChange);
         document.getElementById('qty').addEventListener('input', updateSelectedPreview);
         document.getElementById('btnAddItem').addEventListener('click', addItemToCart);
@@ -1119,6 +1222,21 @@
 
       function getMissingApiMessage_() {
         return 'API endpoint belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman Kasir.';
+      }
+
+      function applySidebarDensityMode_() {
+        const sidebarFlag = new URL(window.location.href).searchParams.get('sidebarDensity');
+        let enabled;
+
+        if (sidebarFlag === '1' || sidebarFlag === 'true') {
+          enabled = true;
+        } else if (sidebarFlag === '0' || sidebarFlag === 'false') {
+          enabled = false;
+        } else {
+          enabled = isAppsScriptRuntime_() && window.innerWidth <= 430;
+        }
+
+        document.body.classList.toggle('sidebar-mode', enabled);
       }
 
       function isAppsScriptRuntime_() {

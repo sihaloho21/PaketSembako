@@ -285,6 +285,126 @@
         display: none;
       }
 
+      body.sidebar-mode::before,
+      body.sidebar-mode::after {
+        display: none;
+      }
+
+      body.sidebar-mode .container {
+        padding: 8px;
+      }
+
+      body.sidebar-mode .topbar {
+        margin-bottom: 10px;
+        padding: 10px 11px;
+        border-radius: 14px;
+        gap: 8px;
+      }
+
+      body.sidebar-mode .title {
+        font-size: 18px;
+      }
+
+      body.sidebar-mode .subtitle {
+        margin-top: 4px;
+        font-size: 11px;
+      }
+
+      body.sidebar-mode .top-actions {
+        width: 100%;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      body.sidebar-mode .stamp {
+        font-size: 11px;
+      }
+
+      body.sidebar-mode .btn {
+        font-size: 12px;
+        padding: 7px 10px;
+      }
+
+      body.sidebar-mode .warning {
+        font-size: 12px;
+        margin-bottom: 8px;
+        padding: 8px 9px;
+      }
+
+      body.sidebar-mode .cards {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      body.sidebar-mode .card {
+        border-radius: 12px;
+        padding: 9px;
+      }
+
+      body.sidebar-mode .card .label {
+        font-size: 11px;
+        margin-bottom: 6px;
+      }
+
+      body.sidebar-mode .card .value {
+        font-size: 19px;
+      }
+
+      body.sidebar-mode .card .chip {
+        font-size: 10px;
+        margin-top: 5px;
+        padding: 2px 6px;
+      }
+
+      body.sidebar-mode .charts {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      body.sidebar-mode .footer-grid {
+        gap: 8px;
+      }
+
+      body.sidebar-mode .panel {
+        border-radius: 12px;
+        padding: 9px;
+      }
+
+      body.sidebar-mode .panel h3 {
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      body.sidebar-mode .chart-box {
+        min-height: 185px;
+      }
+
+      body.sidebar-mode .chart-box.pie {
+        min-height: 220px;
+      }
+
+      body.sidebar-mode .table-wrap {
+        max-height: 260px;
+      }
+
+      body.sidebar-mode table {
+        font-size: 12px;
+      }
+
+      body.sidebar-mode thead th,
+      body.sidebar-mode tbody td {
+        padding: 7px 8px;
+      }
+
+      body.sidebar-mode .loading {
+        right: 10px;
+        bottom: 10px;
+        font-size: 11px;
+        padding: 6px 8px;
+      }
+
       @keyframes rise-in {
         from {
           transform: translateY(10px);
@@ -436,6 +556,9 @@
       const API_BASE = resolveApiBase_();
 
       function init() {
+        applySidebarDensityMode_();
+        window.addEventListener('resize', applySidebarDensityMode_);
+
         document.getElementById('btnRefresh').addEventListener('click', function () {
           fetchDashboard(true);
         });
@@ -557,6 +680,21 @@
 
       function isAppsScriptRuntime_() {
         return typeof google !== 'undefined' && google && google.script && google.script.run;
+      }
+
+      function applySidebarDensityMode_() {
+        const sidebarFlag = new URL(window.location.href).searchParams.get('sidebarDensity');
+        let enabled;
+
+        if (sidebarFlag === '1' || sidebarFlag === 'true') {
+          enabled = true;
+        } else if (sidebarFlag === '0' || sidebarFlag === 'false') {
+          enabled = false;
+        } else {
+          enabled = isAppsScriptRuntime_() && window.innerWidth <= 430;
+        }
+
+        document.body.classList.toggle('sidebar-mode', enabled);
       }
 
       function renderDashboard(payload) {
