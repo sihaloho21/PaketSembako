@@ -622,6 +622,13 @@
           </div>
         </div>
 
+        <div>
+          <label for="categoryFilter">Filter Kategori</label>
+          <select id="categoryFilter">
+            <option value="">Semua Kategori</option>
+          </select>
+        </div>
+
         <div class="product-row">
           <div>
             <label for="product">Produk (SKU)</label>
@@ -743,6 +750,7 @@
         window.addEventListener('resize', applySidebarDensityMode_);
 
         document.getElementById('product').addEventListener('change', onProductChange);
+        document.getElementById('categoryFilter').addEventListener('change', onCategoryFilterChange_);
         document.getElementById('qty').addEventListener('input', updateSelectedPreview);
         document.getElementById('manualPriceToggle').addEventListener('change', onManualPriceToggleChange_);
         document.getElementById('selectedTotal').addEventListener('input', onSelectedTotalManualInput_);
@@ -802,25 +810,31 @@
         renderSummary(payload.summary || {});
         renderWarning(payload.meta && payload.meta.warnings ? payload.meta.warnings : []);
 
-        const select = document.getElementById('product');
-        const selectedSku = select.value;
-        select.innerHTML = '';
+        const productSelect = document.getElementById('product');
+        const selectedSku = productSelect.value;
 
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = products.length ? 'Pilih SKU / Produk' : 'Produk tidak tersedia';
-        select.appendChild(defaultOption);
+        const categorySelect = document.getElementById('categoryFilter');
+        const selectedCategory = categorySelect.value;
+        const categories = getCategoryOptions_();
+        const validSelectedCategory = selectedCategory && categories.indexOf(selectedCategory) > -1
+          ? selectedCategory
+          : '';
 
-        products.forEach(function (item) {
+        categorySelect.innerHTML = '';
+        const defaultCategoryOption = document.createElement('option');
+        defaultCategoryOption.value = '';
+        defaultCategoryOption.textContent = 'Semua Kategori';
+        categorySelect.appendChild(defaultCategoryOption);
+
+        categories.forEach(function (kategori) {
           const opt = document.createElement('option');
-          opt.value = item.sku;
-          opt.textContent = item.sku + ' - ' + item.namaProduk + ' (stok: ' + formatNumber(item.stokTersedia) + ')';
-          select.appendChild(opt);
+          opt.value = kategori;
+          opt.textContent = kategori;
+          categorySelect.appendChild(opt);
         });
+        categorySelect.value = validSelectedCategory;
 
-        if (selectedSku && productMap[selectedSku]) {
-          select.value = selectedSku;
-        }
+        renderProductOptionsByCategory_(validSelectedCategory, selectedSku);
 
         const stockSelect = document.getElementById('stockSku');
         const selectedStockSku = stockSelect.value;
@@ -847,6 +861,68 @@
         refreshCartPricingFromCatalog_();
         onProductChange();
         updateStockPreview_();
+      }
+
+      function onCategoryFilterChange_() {
+        const filterValue = document.getElementById('categoryFilter').value;
+        const currentSku = document.getElementById('product').value;
+        renderProductOptionsByCategory_(filterValue, currentSku);
+        onProductChange();
+      }
+
+      function getCategoryOptions_() {
+        const seen = {};
+        const categories = [];
+
+        products.forEach(function (item) {
+          const kategori = normalizeCategoryLabel_(item && item.kategori) || 'Tanpa Kategori';
+          if (!seen[kategori]) {
+            seen[kategori] = true;
+            categories.push(kategori);
+          }
+        });
+
+        categories.sort(function (a, b) {
+          return a.localeCompare(b, 'id');
+        });
+        return categories;
+      }
+
+      function getFilteredProductsByCategory_(categoryValue) {
+        const kategori = normalizeCategoryLabel_(categoryValue);
+        if (!kategori) {
+          return products.slice();
+        }
+
+        return products.filter(function (item) {
+          const itemCategory = normalizeCategoryLabel_(item && item.kategori) || 'Tanpa Kategori';
+          return itemCategory === kategori;
+        });
+      }
+
+      function renderProductOptionsByCategory_(categoryValue, preferredSku) {
+        const select = document.getElementById('product');
+        const filteredProducts = getFilteredProductsByCategory_(categoryValue);
+
+        select.innerHTML = '';
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = filteredProducts.length
+          ? 'Pilih SKU / Produk'
+          : 'Produk tidak tersedia pada kategori ini';
+        select.appendChild(defaultOption);
+
+        filteredProducts.forEach(function (item) {
+          const opt = document.createElement('option');
+          opt.value = item.sku;
+          opt.textContent = item.sku + ' - ' + item.namaProduk + ' (stok: ' + formatNumber(item.stokTersedia) + ')';
+          select.appendChild(opt);
+        });
+
+        const preferredExists = filteredProducts.some(function (item) {
+          return item.sku === preferredSku;
+        });
+        select.value = preferredExists ? preferredSku : '';
       }
 
       function renderSummary(summary) {
@@ -1555,6 +1631,11 @@
 
         const num = parseFloat(text);
         return Number.isFinite(num) ? num : 0;
+      }
+
+      function normalizeCategoryLabel_(value) {
+        const text = value === null || value === undefined ? '' : String(value).trim();
+        return text || '';
       }
 
       function formatNumber(value) {
