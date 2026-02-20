@@ -629,6 +629,11 @@
           </select>
         </div>
 
+        <div>
+          <label for="productSearch">Search Produk</label>
+          <input id="productSearch" type="text" placeholder="Cari SKU / nama produk" autocomplete="off" />
+        </div>
+
         <div class="product-row">
           <div>
             <label for="product">Produk (SKU)</label>
@@ -751,6 +756,7 @@
 
         document.getElementById('product').addEventListener('change', onProductChange);
         document.getElementById('categoryFilter').addEventListener('change', onCategoryFilterChange_);
+        document.getElementById('productSearch').addEventListener('input', onProductSearchInput_);
         document.getElementById('qty').addEventListener('input', updateSelectedPreview);
         document.getElementById('manualPriceToggle').addEventListener('change', onManualPriceToggleChange_);
         document.getElementById('selectedTotal').addEventListener('input', onSelectedTotalManualInput_);
@@ -819,6 +825,8 @@
         const validSelectedCategory = selectedCategory && categories.indexOf(selectedCategory) > -1
           ? selectedCategory
           : '';
+        const searchInput = document.getElementById('productSearch');
+        const currentSearch = searchInput ? searchInput.value : '';
 
         categorySelect.innerHTML = '';
         const defaultCategoryOption = document.createElement('option');
@@ -834,7 +842,7 @@
         });
         categorySelect.value = validSelectedCategory;
 
-        renderProductOptionsByCategory_(validSelectedCategory, selectedSku);
+        renderProductOptionsByFilter_(validSelectedCategory, currentSearch, selectedSku);
 
         const stockSelect = document.getElementById('stockSku');
         const selectedStockSku = stockSelect.value;
@@ -866,7 +874,16 @@
       function onCategoryFilterChange_() {
         const filterValue = document.getElementById('categoryFilter').value;
         const currentSku = document.getElementById('product').value;
-        renderProductOptionsByCategory_(filterValue, currentSku);
+        const searchTerm = getProductSearchTerm_();
+        renderProductOptionsByFilter_(filterValue, searchTerm, currentSku);
+        onProductChange();
+      }
+
+      function onProductSearchInput_() {
+        const filterValue = document.getElementById('categoryFilter').value;
+        const currentSku = document.getElementById('product').value;
+        const searchTerm = getProductSearchTerm_();
+        renderProductOptionsByFilter_(filterValue, searchTerm, currentSku);
         onProductChange();
       }
 
@@ -888,28 +905,36 @@
         return categories;
       }
 
-      function getFilteredProductsByCategory_(categoryValue) {
+      function getFilteredProductsByFilter_(categoryValue, searchTerm) {
         const kategori = normalizeCategoryLabel_(categoryValue);
-        if (!kategori) {
-          return products.slice();
-        }
+        const keyword = normalizeSearchText_(searchTerm);
 
         return products.filter(function (item) {
           const itemCategory = normalizeCategoryLabel_(item && item.kategori) || 'Tanpa Kategori';
-          return itemCategory === kategori;
+          if (kategori && itemCategory !== kategori) {
+            return false;
+          }
+          if (!keyword) {
+            return true;
+          }
+
+          const haystack = normalizeSearchText_(
+            [item && item.sku, item && item.namaProduk, item && item.kategori].join(' ')
+          );
+          return haystack.indexOf(keyword) > -1;
         });
       }
 
-      function renderProductOptionsByCategory_(categoryValue, preferredSku) {
+      function renderProductOptionsByFilter_(categoryValue, searchTerm, preferredSku) {
         const select = document.getElementById('product');
-        const filteredProducts = getFilteredProductsByCategory_(categoryValue);
+        const filteredProducts = getFilteredProductsByFilter_(categoryValue, searchTerm);
 
         select.innerHTML = '';
         const defaultOption = document.createElement('option');
         defaultOption.value = '';
         defaultOption.textContent = filteredProducts.length
           ? 'Pilih SKU / Produk'
-          : 'Produk tidak tersedia pada kategori ini';
+          : 'Produk tidak ditemukan';
         select.appendChild(defaultOption);
 
         filteredProducts.forEach(function (item) {
@@ -923,6 +948,11 @@
           return item.sku === preferredSku;
         });
         select.value = preferredExists ? preferredSku : '';
+      }
+
+      function getProductSearchTerm_() {
+        const searchInput = document.getElementById('productSearch');
+        return searchInput ? searchInput.value : '';
       }
 
       function renderSummary(summary) {
@@ -1636,6 +1666,13 @@
       function normalizeCategoryLabel_(value) {
         const text = value === null || value === undefined ? '' : String(value).trim();
         return text || '';
+      }
+
+      function normalizeSearchText_(value) {
+        return String(value === null || value === undefined ? '' : value)
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim();
       }
 
       function formatNumber(value) {
