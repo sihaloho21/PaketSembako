@@ -592,12 +592,204 @@
           display: none;
         }
       }
+
+      /* UI refresh overrides */
+      body {
+        padding: 16px;
+        background:
+          radial-gradient(circle at 8% 8%, rgba(29, 78, 216, 0.14) 0%, transparent 36%),
+          radial-gradient(circle at 92% 2%, rgba(15, 118, 110, 0.14) 0%, transparent 34%),
+          linear-gradient(165deg, #f8fbff 0%, #e7f0fa 100%);
+      }
+
+      .card {
+        max-width: 1180px;
+        margin: 0 auto;
+        border-radius: 20px;
+        padding: 18px;
+        border-color: #cbd9e8;
+        box-shadow: 0 24px 52px rgba(13, 31, 53, 0.14);
+      }
+
+      .hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid #b8d7d3;
+        background: linear-gradient(135deg, #ebf8f6, #f2fbff);
+        color: #0f615b;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .summary {
+        margin-top: 15px;
+        gap: 11px;
+      }
+
+      .summary-box {
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .summary-box .v {
+        font-size: 20px;
+      }
+
+      .form-grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+        gap: 14px;
+      }
+
+      .panel {
+        border: 1px solid #cbd9e8;
+        border-radius: 15px;
+        padding: 14px;
+        background: #ffffff;
+        box-shadow: 0 12px 28px rgba(18, 37, 61, 0.06);
+      }
+
+      .panel-head h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 800;
+        color: #1d3650;
+      }
+
+      .panel-head p {
+        margin: 4px 0 0;
+        color: #61798f;
+        font-size: 11px;
+      }
+
+      .form {
+        margin-top: 12px;
+        gap: 11px;
+      }
+
+      .grid-2.align-end {
+        align-items: end;
+      }
+
+      label {
+        font-weight: 700;
+      }
+
+      .selected-product {
+        min-height: 32px;
+        border-radius: 10px;
+        border: 1px dashed #c4d4e7;
+        background: #f7fbff;
+        color: #5e7690;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 10px;
+        display: flex;
+        align-items: center;
+      }
+
+      .selected-product.active {
+        border-color: #9ac6bb;
+        background: #eefbf6;
+        color: #0f6159;
+      }
+
+      .qty-row {
+        grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) auto;
+      }
+
+      .cart {
+        overflow: auto;
+      }
+
+      table {
+        min-width: 560px;
+      }
+
+      .total-box {
+        margin-top: 10px;
+      }
+
+      .actions {
+        margin-top: 10px;
+      }
+
+      .stock-section {
+        margin-top: 14px;
+      }
+
+      @media (max-width: 980px) {
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .hero {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .card {
+          padding: 12px;
+        }
+
+        .summary,
+        .grid-2,
+        .qty-row,
+        .stock-row,
+        .actions {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      body.sidebar-mode .hero-badge {
+        min-height: 26px;
+        font-size: 10px;
+        padding: 4px 9px;
+      }
+
+      body.sidebar-mode .form-grid {
+        grid-template-columns: 1fr;
+        gap: 9px;
+      }
+
+      body.sidebar-mode .panel {
+        padding: 9px;
+      }
+
+      body.sidebar-mode .selected-product {
+        min-height: 34px;
+      }
     </style>
   </head>
   <body>
     <div class="card">
-      <h1>Form Kasir</h1>
-      <div class="sub">Mode cart aktif: pilih beberapa SKU lalu simpan sekali transaksi dengan nomor invoice.</div>
+      <div class="hero">
+        <div>
+          <h1>Form Kasir</h1>
+          <div class="sub">Pilih produk dari kolom pencarian, buat keranjang, lalu simpan sebagai satu invoice.</div>
+        </div>
+        <div class="hero-badge">Mode Cart</div>
+      </div>
 
       <div class="summary">
         <div class="summary-box">
@@ -614,103 +806,122 @@
         </div>
       </div>
 
-      <div class="form">
-        <div class="grid-2">
-          <div>
-            <label for="customer">Nama Pelanggan</label>
-            <input id="customer" type="text" placeholder="Contoh: Budi" autocomplete="off" />
+      <div class="form-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Input Transaksi</h2>
+            <p>Pencarian produk sekarang langsung menjadi pemilih SKU.</p>
           </div>
-          <div>
-            <label for="invoiceNote">Catatan Invoice</label>
-            <input id="invoiceNote" type="text" placeholder="Opsional (berlaku untuk transaksi ini)" autocomplete="off" />
-          </div>
-        </div>
 
-        <div>
-          <label for="categoryFilter">Filter Kategori</label>
-          <select id="categoryFilter">
-            <option value="">Semua Kategori</option>
-          </select>
-        </div>
-
-        <div class="product-row">
-          <div>
-            <label for="product">Produk (SKU)</label>
-            <input
-              id="productSearch"
-              type="text"
-              list="productSuggestList"
-              placeholder="Cari SKU / nama produk, lalu pilih saran"
-              autocomplete="off"
-            />
-            <datalist id="productSuggestList"></datalist>
-            <select id="product">
-              <option value="">Memuat data produk...</option>
-            </select>
-          </div>
-          <div>
-            <label for="qty">Qty</label>
-            <input id="qty" type="number" min="1" step="1" placeholder="0" />
-          </div>
-        </div>
-
-        <div class="qty-row">
-          <div>
-            <label for="itemNote">Catatan Item</label>
-            <input id="itemNote" type="text" placeholder="Opsional" autocomplete="off" />
-          </div>
-          <div>
-            <div class="subtotal-head">
-              <label for="selectedTotal">Subtotal Item Dipilih</label>
-              <span id="priceModeBadge" class="mode-badge auto">AUTO</span>
+          <div class="form">
+            <div class="grid-2">
+              <div>
+                <label for="customer">Nama Pelanggan</label>
+                <input id="customer" type="text" placeholder="Contoh: Budi" autocomplete="off" />
+              </div>
+              <div>
+                <label for="invoiceNote">Catatan Invoice</label>
+                <input id="invoiceNote" type="text" placeholder="Opsional (berlaku untuk transaksi ini)" autocomplete="off" />
+              </div>
             </div>
-            <input id="selectedTotal" type="text" value="Rp0" placeholder="Aktifkan toggle untuk ubah manual" autocomplete="off" readonly />
-            <label class="checkbox-inline" for="manualPriceToggle">
-              <input id="manualPriceToggle" type="checkbox" />
-              <span>Gunakan harga manual</span>
-            </label>
+
+            <div class="grid-2 align-end">
+              <div>
+                <label for="categoryFilter">Filter Kategori</label>
+                <select id="categoryFilter">
+                  <option value="">Semua Kategori</option>
+                </select>
+              </div>
+              <div>
+                <label for="qty">Qty</label>
+                <input id="qty" type="number" min="1" step="1" placeholder="0" />
+              </div>
+            </div>
+
+            <div>
+              <label for="productSearch">Produk (SKU)</label>
+              <input
+                id="productSearch"
+                type="text"
+                list="productSuggestList"
+                placeholder="Cari SKU / nama produk, lalu pilih saran"
+                autocomplete="off"
+              />
+              <datalist id="productSuggestList"></datalist>
+              <div class="selected-product" id="selectedProduct">Belum ada produk dipilih.</div>
+            </div>
+
+            <div class="qty-row">
+              <div>
+                <label for="itemNote">Catatan Item</label>
+                <input id="itemNote" type="text" placeholder="Opsional" autocomplete="off" />
+              </div>
+              <div>
+                <div class="subtotal-head">
+                  <label for="selectedTotal">Subtotal Item Dipilih</label>
+                  <span id="priceModeBadge" class="mode-badge auto">AUTO</span>
+                </div>
+                <input id="selectedTotal" type="text" value="Rp0" placeholder="Aktifkan toggle untuk ubah manual" autocomplete="off" readonly />
+                <label class="checkbox-inline" for="manualPriceToggle">
+                  <input id="manualPriceToggle" type="checkbox" />
+                  <span>Gunakan harga manual</span>
+                </label>
+              </div>
+              <button id="btnAddItem" class="btn btn-soft" type="button">Tambah ke Keranjang</button>
+            </div>
+
+            <div class="product-meta">
+              <div class="meta-row"><span class="meta-label">Nama Produk</span><span class="meta-value" id="metaNama">-</span></div>
+              <div class="meta-row"><span class="meta-label">Kategori</span><span class="meta-value" id="metaKategori">-</span></div>
+              <div class="meta-row"><span class="meta-label">Satuan</span><span class="meta-value" id="metaSatuan">-</span></div>
+              <div class="meta-row"><span class="meta-label">Harga Satuan</span><span class="meta-value" id="metaHarga">Rp0</span></div>
+              <div class="meta-row"><span class="meta-label">Stok Tersedia</span><span class="meta-value" id="metaStok">0</span></div>
+            </div>
           </div>
-          <button id="btnAddItem" class="btn btn-soft" type="button">Tambah ke Keranjang</button>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Keranjang</h2>
+            <p>Pastikan qty dan harga sudah benar sebelum simpan transaksi.</p>
+          </div>
+
+          <div class="cart">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produk</th>
+                  <th>Qty</th>
+                  <th>Harga</th>
+                  <th>Total</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="cartBody"></tbody>
+            </table>
+          </div>
+
+          <div class="total-box">
+            <div class="k">Total Keranjang</div>
+            <div class="v" id="cartTotal">Rp0</div>
+            <div class="mini">Item: <span id="cartItemsCount">0</span> | Qty: <span id="cartQtyCount">0</span></div>
+          </div>
+
+          <div class="actions">
+            <button id="btnSave" class="btn btn-primary" type="button">Simpan Transaksi</button>
+            <button id="btnReset" class="btn btn-danger" type="button">Kosongkan Keranjang</button>
+            <button id="btnReload" class="btn" type="button">Reload</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel stock-section">
+        <div class="panel-head">
+          <h2>Tambah Stok Cepat</h2>
+          <p>Gunakan untuk restok tanpa keluar dari halaman kasir.</p>
         </div>
 
-        <div class="product-meta">
-          <div class="meta-row"><span class="meta-label">Nama Produk</span><span class="meta-value" id="metaNama">-</span></div>
-          <div class="meta-row"><span class="meta-label">Kategori</span><span class="meta-value" id="metaKategori">-</span></div>
-          <div class="meta-row"><span class="meta-label">Satuan</span><span class="meta-value" id="metaSatuan">-</span></div>
-          <div class="meta-row"><span class="meta-label">Harga Satuan</span><span class="meta-value" id="metaHarga">Rp0</span></div>
-          <div class="meta-row"><span class="meta-label">Stok Tersedia</span><span class="meta-value" id="metaStok">0</span></div>
-        </div>
-
-        <div class="cart">
-          <table>
-            <thead>
-              <tr>
-                <th>Produk</th>
-                <th>Qty</th>
-                <th>Harga</th>
-                <th>Total</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="cartBody"></tbody>
-          </table>
-        </div>
-
-        <div class="total-box">
-          <div class="k">Total Keranjang</div>
-          <div class="v" id="cartTotal">Rp0</div>
-          <div class="mini">Item: <span id="cartItemsCount">0</span> | Qty: <span id="cartQtyCount">0</span></div>
-        </div>
-
-        <div class="actions">
-          <button id="btnSave" class="btn btn-primary" type="button">Simpan Transaksi</button>
-          <button id="btnReset" class="btn btn-danger" type="button">Kosongkan Keranjang</button>
-          <button id="btnReload" class="btn" type="button">Reload</button>
-        </div>
-
-        <div class="stock-section">
-          <div class="stock-head">Tambah Stok Cepat</div>
-
+        <div class="form">
           <div class="stock-row">
             <div>
               <label for="stockSku">SKU Produk</label>
@@ -740,7 +951,7 @@
 
           <button id="btnStockAdd" class="btn btn-soft" type="button">Simpan Tambah Stok</button>
         </div>
-      </div>
+      </section>
 
       <div class="invoice" id="invoiceInfo"></div>
       <div class="status" id="status"></div>
@@ -751,6 +962,7 @@
       let products = [];
       let productMap = {};
       let cartItems = [];
+      let selectedProductSku = '';
       let selectedManualUnitPrice = null;
       let isLoading = false;
 
@@ -761,10 +973,11 @@
         applySidebarDensityMode_();
         window.addEventListener('resize', applySidebarDensityMode_);
 
-        document.getElementById('product').addEventListener('change', onProductSelectChange_);
         document.getElementById('categoryFilter').addEventListener('change', onCategoryFilterChange_);
         document.getElementById('productSearch').addEventListener('input', onProductSearchInput_);
         document.getElementById('productSearch').addEventListener('change', onProductSearchCommit_);
+        document.getElementById('productSearch').addEventListener('blur', onProductSearchCommit_);
+        document.getElementById('productSearch').addEventListener('keydown', onProductSearchKeydown_);
         document.getElementById('qty').addEventListener('input', updateSelectedPreview);
         document.getElementById('manualPriceToggle').addEventListener('change', onManualPriceToggleChange_);
         document.getElementById('selectedTotal').addEventListener('input', onSelectedTotalManualInput_);
@@ -824,8 +1037,7 @@
         renderSummary(payload.summary || {});
         renderWarning(payload.meta && payload.meta.warnings ? payload.meta.warnings : []);
 
-        const productSelect = document.getElementById('product');
-        const selectedSku = productSelect.value;
+        const selectedSku = selectedProductSku;
 
         const categorySelect = document.getElementById('categoryFilter');
         const selectedCategory = categorySelect.value;
@@ -853,9 +1065,13 @@
         refreshProductSuggestions_(validSelectedCategory, currentSearch);
         const matchedSkuFromSearch = findSkuBySearchTerm_(currentSearch, validSelectedCategory);
         const preferredSku = matchedSkuFromSearch || (normalizeSearchText_(currentSearch) ? '' : selectedSku);
-        renderProductOptionsByFilter_(validSelectedCategory, currentSearch, preferredSku);
-        if (matchedSkuFromSearch) {
-          productSelect.value = matchedSkuFromSearch;
+        const shouldSyncSearchLabel = !!matchedSkuFromSearch || (!normalizeSearchText_(currentSearch) && !!preferredSku);
+        setSelectedProductSku_(preferredSku, {
+          syncSearchLabel: shouldSyncSearchLabel,
+          preserveSearch: !shouldSyncSearchLabel,
+        });
+        if (!selectedProductSku && !normalizeSearchText_(currentSearch)) {
+          updateSelectedProductBadge_(null);
         }
 
         const stockSelect = document.getElementById('stockSku');
@@ -876,19 +1092,12 @@
 
         if (selectedStockSku && productMap[selectedStockSku]) {
           stockSelect.value = selectedStockSku;
-        } else if (selectedSku && productMap[selectedSku]) {
-          stockSelect.value = selectedSku;
+        } else if (selectedProductSku && productMap[selectedProductSku]) {
+          stockSelect.value = selectedProductSku;
         }
 
         refreshCartPricingFromCatalog_();
-        onProductChange();
         updateStockPreview_();
-      }
-
-      function onProductSelectChange_() {
-        const sku = document.getElementById('product').value;
-        syncProductSearchWithSku_(sku);
-        onProductChange();
       }
 
       function onCategoryFilterChange_() {
@@ -903,26 +1112,47 @@
         applyProductSearchFilter_({ syncSearchLabel: true });
       }
 
+      function onProductSearchKeydown_(event) {
+        if (!event || event.key !== 'Enter') {
+          return;
+        }
+        event.preventDefault();
+        applyProductSearchFilter_({ syncSearchLabel: true });
+        if (selectedProductSku) {
+          document.getElementById('qty').focus();
+        }
+      }
+
       function applyProductSearchFilter_(options) {
         const opts = options || {};
         const filterValue = document.getElementById('categoryFilter').value;
-        const select = document.getElementById('product');
-        const currentSku = select.value;
+        const currentSku = selectedProductSku;
         const searchTerm = getProductSearchTerm_();
+        const normalizedSearch = normalizeSearchText_(searchTerm);
 
         refreshProductSuggestions_(filterValue, searchTerm);
         const matchedSku = findSkuBySearchTerm_(searchTerm, filterValue);
-        const preferredSku = matchedSku || (normalizeSearchText_(searchTerm) ? '' : currentSku);
-
-        renderProductOptionsByFilter_(filterValue, searchTerm, preferredSku);
         if (matchedSku) {
-          select.value = matchedSku;
-          if (opts.syncSearchLabel) {
-            syncProductSearchWithSku_(matchedSku);
-          }
+          setSelectedProductSku_(matchedSku, {
+            syncSearchLabel: !!opts.syncSearchLabel,
+            preserveSearch: !opts.syncSearchLabel,
+          });
+          return;
         }
 
-        onProductChange();
+        if (!normalizedSearch) {
+          if (currentSku && isSkuAllowedByCategory_(currentSku, filterValue)) {
+            setSelectedProductSku_(currentSku, {
+              syncSearchLabel: !!opts.syncSearchLabel,
+              preserveSearch: !opts.syncSearchLabel,
+            });
+          } else {
+            setSelectedProductSku_('', { preserveSearch: true });
+          }
+          return;
+        }
+
+        setSelectedProductSku_('', { preserveSearch: true });
       }
 
       function getCategoryOptions_() {
@@ -1042,34 +1272,23 @@
         });
       }
 
-      function renderProductOptionsByFilter_(categoryValue, searchTerm, preferredSku) {
-        const select = document.getElementById('product');
-        const filteredProducts = getFilteredProductsByFilter_(categoryValue, searchTerm);
-
-        select.innerHTML = '';
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = filteredProducts.length
-          ? 'Pilih SKU / Produk'
-          : 'Produk tidak ditemukan';
-        select.appendChild(defaultOption);
-
-        filteredProducts.forEach(function (item) {
-          const opt = document.createElement('option');
-          opt.value = item.sku;
-          opt.textContent = item.sku + ' - ' + item.namaProduk + ' (stok: ' + formatNumber(item.stokTersedia) + ')';
-          select.appendChild(opt);
-        });
-
-        const preferredExists = filteredProducts.some(function (item) {
-          return item.sku === preferredSku;
-        });
-        select.value = preferredExists ? preferredSku : '';
-      }
-
       function getProductSearchTerm_() {
         const searchInput = document.getElementById('productSearch');
         return searchInput ? searchInput.value : '';
+      }
+
+      function isSkuAllowedByCategory_(sku, categoryValue) {
+        const item = productMap[normalizeSku_(sku)];
+        if (!item) {
+          return false;
+        }
+
+        const categoryFilter = normalizeCategoryLabel_(categoryValue);
+        if (!categoryFilter) {
+          return true;
+        }
+
+        return (normalizeCategoryLabel_(item.kategori) || 'Tanpa Kategori') === categoryFilter;
       }
 
       function findSkuBySearchTerm_(searchTerm, categoryValue) {
@@ -1104,7 +1323,8 @@
           return exactNameMatches[0];
         }
 
-        const maybeSku = normalizeSku_(String(searchTerm).split('-')[0]);
+        const maybeSkuMatch = String(searchTerm || '').trim().match(/^([A-Za-z0-9][A-Za-z0-9-_\/.]*)\s*-/);
+        const maybeSku = normalizeSku_(maybeSkuMatch ? maybeSkuMatch[1] : '');
         if (maybeSku && allowedBySku[maybeSku]) {
           return maybeSku;
         }
@@ -1126,13 +1346,46 @@
         return safeText_(item && item.sku) + ' - ' + safeText_(item && item.namaProduk);
       }
 
-      function syncProductSearchWithSku_(sku) {
-        const item = productMap[safeText_(sku)];
-        const input = document.getElementById('productSearch');
-        if (!input || !item) {
+      function setSelectedProductSku_(sku, options) {
+        const opts = options || {};
+        const normalized = normalizeSku_(sku);
+        const item = normalized ? productMap[normalized] : null;
+
+        selectedProductSku = item ? item.sku : '';
+        if (opts.syncSearchLabel) {
+          syncProductSearchWithSku_(selectedProductSku);
+        } else if (!opts.preserveSearch && !selectedProductSku) {
+          syncProductSearchWithSku_('');
+        }
+
+        updateSelectedProductBadge_(item);
+        onProductChange();
+      }
+
+      function updateSelectedProductBadge_(item) {
+        const badge = document.getElementById('selectedProduct');
+        if (!badge) {
           return;
         }
-        input.value = buildProductSearchLabel_(item);
+
+        if (!item) {
+          badge.textContent = 'Belum ada produk dipilih.';
+          badge.classList.remove('active');
+          return;
+        }
+
+        badge.textContent = item.sku + ' - ' + (item.namaProduk || '-') + ' | Stok: ' + formatNumber(item.stokTersedia || 0);
+        badge.classList.add('active');
+      }
+
+      function syncProductSearchWithSku_(sku) {
+        const input = document.getElementById('productSearch');
+        if (!input) {
+          return;
+        }
+
+        const item = productMap[normalizeSku_(sku)];
+        input.value = item ? buildProductSearchLabel_(item) : '';
       }
 
       function renderSummary(summary) {
@@ -1154,7 +1407,7 @@
       }
 
       function onProductChange() {
-        const sku = document.getElementById('product').value;
+        const sku = selectedProductSku;
         const item = productMap[sku];
         setManualPriceMode_(false);
         if (!item) {
@@ -1182,7 +1435,7 @@
       }
 
       function updateSelectedPreview() {
-        const sku = document.getElementById('product').value;
+        const sku = selectedProductSku;
         const item = productMap[sku];
         const qty = Number(document.getElementById('qty').value || 0);
         const defaultHarga = round2(Number(item && item.hargaJual) || 0);
@@ -1255,7 +1508,7 @@
           return;
         }
 
-        const sku = document.getElementById('product').value;
+        const sku = selectedProductSku;
         const item = productMap[sku];
         const qty = Number(document.getElementById('qty').value || 0);
         const inputEl = document.getElementById('selectedTotal');
@@ -1280,13 +1533,13 @@
       }
 
       function addItemToCart() {
-        const sku = document.getElementById('product').value;
+        const sku = selectedProductSku;
         const qty = Number(document.getElementById('qty').value || 0);
         const itemNote = document.getElementById('itemNote').value.trim();
         const item = productMap[sku];
 
         if (!item) {
-          setStatus('Pilih SKU terlebih dahulu.', true);
+          setStatus('Pilih produk dari kolom "Produk (SKU)" terlebih dahulu.', true);
           return;
         }
 
