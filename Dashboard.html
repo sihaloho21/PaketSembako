@@ -107,6 +107,39 @@
         gap: 10px;
       }
 
+      .page-menu {
+        margin-bottom: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .page-menu-btn {
+        width: auto;
+        min-width: 138px;
+        border: 1px solid #c7d7ea;
+        background: linear-gradient(135deg, #ffffff, #f3f8ff);
+        color: #223b55;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      }
+
+      .page-menu-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        border-color: #9bb8d6;
+        box-shadow: 0 10px 20px rgba(18, 39, 67, 0.12);
+      }
+
+      .page-menu-btn.active {
+        border-color: #9acfc2;
+        background: linear-gradient(135deg, #e8f9f5, #ecf7ff);
+        color: #0f5f57;
+      }
+
       .btn {
         border: 1px solid var(--line);
         background: linear-gradient(135deg, #ffffff, #f6f9ff);
@@ -316,6 +349,18 @@
         gap: 8px;
       }
 
+      body.sidebar-mode .page-menu {
+        margin-bottom: 8px;
+        gap: 6px;
+      }
+
+      body.sidebar-mode .page-menu-btn {
+        width: 100%;
+        min-width: 0;
+        font-size: 11px;
+        padding: 7px 9px;
+      }
+
       body.sidebar-mode .stamp {
         font-size: 11px;
       }
@@ -435,11 +480,22 @@
           flex-direction: column;
           align-items: flex-start;
         }
+
+        .page-menu-btn {
+          width: 100%;
+          min-width: 0;
+        }
       }
     </style>
   </head>
   <body>
     <div class="container">
+      <div class="page-menu" id="pageMenu">
+        <button class="page-menu-btn" type="button" data-view="kasir">Buka Kasir</button>
+        <button class="page-menu-btn" type="button" data-view="produk">Manajemen Produk</button>
+        <button class="page-menu-btn" type="button" data-view="dashboard">Buka Dashboard</button>
+      </div>
+
       <header class="topbar">
         <div>
           <h1 class="title">Dashboard Penjualan</h1>
@@ -558,6 +614,7 @@
       function init() {
         applySidebarDensityMode_();
         window.addEventListener('resize', applySidebarDensityMode_);
+        setupPageMenu_('dashboard');
 
         document.getElementById('btnRefresh').addEventListener('click', function () {
           fetchDashboard(true);
@@ -676,6 +733,89 @@
           return '';
         }
         return text.replace(/\/+$/, '');
+      }
+
+      function setupPageMenu_(activeView) {
+        const menu = document.getElementById('pageMenu');
+        if (!menu) {
+          return;
+        }
+
+        Array.prototype.forEach.call(menu.querySelectorAll('[data-view]'), function (button) {
+          const view = button.getAttribute('data-view');
+          const isActive = view === activeView;
+          button.classList.toggle('active', isActive);
+          button.disabled = !!isActive;
+          button.addEventListener('click', function () {
+            navigatePageView_(view);
+          });
+        });
+      }
+
+      function navigatePageView_(view) {
+        if (isEmbeddedContainerUi_()) {
+          openSpreadsheetView_(view);
+          return;
+        }
+
+        if (isAppsScriptRuntime_()) {
+          window.location.href = withViewParam_(view);
+          return;
+        }
+
+        const fileMap = {
+          kasir: 'Kasir.html',
+          produk: 'Produk.html',
+          dashboard: 'Dashboard.html',
+        };
+        const targetFile = fileMap[view] || 'Dashboard.html';
+        const url = new URL(targetFile, window.location.href);
+        if (API_BASE) {
+          url.searchParams.set('apiBase', API_BASE);
+        }
+        window.location.href = url.toString();
+      }
+
+      function withViewParam_(view) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('view', view);
+        return url.toString();
+      }
+
+      function isEmbeddedContainerUi_() {
+        return (
+          isAppsScriptRuntime_() &&
+          typeof window !== 'undefined' &&
+          window.top !== window &&
+          google &&
+          google.script &&
+          google.script.host &&
+          typeof google.script.host.close === 'function'
+        );
+      }
+
+      function openSpreadsheetView_(view) {
+        const functionMap = {
+          kasir: 'showKasirModal',
+          produk: 'showProductManagerModal',
+          dashboard: 'showDashboard',
+        };
+
+        const fn = functionMap[view];
+        if (!fn) {
+          return;
+        }
+
+        const runner = google.script.run.withFailureHandler(function () {
+          window.location.href = withViewParam_(view);
+        });
+
+        if (typeof runner[fn] === 'function') {
+          runner[fn]();
+          if (google.script.host && typeof google.script.host.close === 'function') {
+            google.script.host.close();
+          }
+        }
       }
 
       function isAppsScriptRuntime_() {
