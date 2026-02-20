@@ -139,6 +139,69 @@
         color: #23486a;
       }
 
+      .checkbox-inline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+      }
+
+      .checkbox-inline input[type='checkbox'] {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid #9ab3d3;
+        border-radius: 4px;
+        accent-color: #0f766e;
+        flex: 0 0 auto;
+      }
+
+      .checkbox-inline span {
+        font-size: 12px;
+        color: var(--sub);
+        font-weight: 600;
+      }
+
+      .subtotal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .subtotal-head label {
+        margin-bottom: 0;
+      }
+
+      .mode-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 62px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid #c6d7eb;
+        background: #eef5ff;
+        color: #315b7f;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        line-height: 1.4;
+      }
+
+      .mode-badge.manual {
+        border-color: #9ad7b7;
+        background: #e9fbf1;
+        color: #0f6b4f;
+      }
+
+      .mode-badge.auto {
+        border-color: #c6d7eb;
+        background: #eef5ff;
+        color: #315b7f;
+      }
+
       input:focus,
       select:focus,
       textarea:focus {
@@ -454,6 +517,21 @@
         font-size: 12px;
       }
 
+      body.sidebar-mode .checkbox-inline input[type='checkbox'] {
+        width: 14px;
+        height: 14px;
+      }
+
+      body.sidebar-mode .checkbox-inline span {
+        font-size: 11px;
+      }
+
+      body.sidebar-mode .mode-badge {
+        min-width: 56px;
+        font-size: 9px;
+        padding: 2px 7px;
+      }
+
       body.sidebar-mode th,
       body.sidebar-mode td {
         font-size: 12px;
@@ -563,8 +641,15 @@
             <input id="itemNote" type="text" placeholder="Opsional" autocomplete="off" />
           </div>
           <div>
-            <label for="selectedTotal">Subtotal Item Dipilih</label>
-            <input id="selectedTotal" type="text" value="Rp0" readonly />
+            <div class="subtotal-head">
+              <label for="selectedTotal">Subtotal Item Dipilih</label>
+              <span id="priceModeBadge" class="mode-badge auto">AUTO</span>
+            </div>
+            <input id="selectedTotal" type="text" value="Rp0" placeholder="Aktifkan toggle untuk ubah manual" autocomplete="off" readonly />
+            <label class="checkbox-inline" for="manualPriceToggle">
+              <input id="manualPriceToggle" type="checkbox" />
+              <span>Gunakan harga manual</span>
+            </label>
           </div>
           <button id="btnAddItem" class="btn btn-soft" type="button">Tambah ke Keranjang</button>
         </div>
@@ -647,6 +732,7 @@
       let products = [];
       let productMap = {};
       let cartItems = [];
+      let selectedManualUnitPrice = null;
       let isLoading = false;
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
@@ -658,6 +744,9 @@
 
         document.getElementById('product').addEventListener('change', onProductChange);
         document.getElementById('qty').addEventListener('input', updateSelectedPreview);
+        document.getElementById('manualPriceToggle').addEventListener('change', onManualPriceToggleChange_);
+        document.getElementById('selectedTotal').addEventListener('input', onSelectedTotalManualInput_);
+        document.getElementById('selectedTotal').addEventListener('blur', updateSelectedPreview);
         document.getElementById('btnAddItem').addEventListener('click', addItemToCart);
         document.getElementById('btnSave').addEventListener('click', saveTransaction);
         document.getElementById('btnReset').addEventListener('click', resetCart);
@@ -679,6 +768,7 @@
           return;
         }
 
+        setManualPriceMode_(false);
         renderCart();
         loadOptions();
       }
@@ -780,6 +870,7 @@
       function onProductChange() {
         const sku = document.getElementById('product').value;
         const item = productMap[sku];
+        setManualPriceMode_(false);
         if (!item) {
           clearProductMeta();
           return;
@@ -795,6 +886,7 @@
       }
 
       function clearProductMeta() {
+        setManualPriceMode_(false);
         document.getElementById('metaNama').textContent = '-';
         document.getElementById('metaKategori').textContent = '-';
         document.getElementById('metaSatuan').textContent = '-';
@@ -807,14 +899,98 @@
         const sku = document.getElementById('product').value;
         const item = productMap[sku];
         const qty = Number(document.getElementById('qty').value || 0);
+        const defaultHarga = round2(Number(item && item.hargaJual) || 0);
+        const useManualPrice = isManualPriceEnabled_();
 
         if (!item || !qty || qty <= 0) {
           document.getElementById('selectedTotal').value = 'Rp0';
           return;
         }
 
-        const total = (Number(item.hargaJual) || 0) * qty;
+        if (useManualPrice && (selectedManualUnitPrice === null || selectedManualUnitPrice === undefined)) {
+          selectedManualUnitPrice = defaultHarga;
+        }
+
+        const hargaSatuan = useManualPrice
+          ? Math.max(0, round2(Number(selectedManualUnitPrice) || 0))
+          : defaultHarga;
+        const total = round2(hargaSatuan * qty);
         document.getElementById('selectedTotal').value = formatCurrency(total);
+      }
+
+      function isManualPriceEnabled_() {
+        const toggle = document.getElementById('manualPriceToggle');
+        return !!(toggle && toggle.checked);
+      }
+
+      function setManualPriceMode_(enabled) {
+        const toggle = document.getElementById('manualPriceToggle');
+        const subtotalInput = document.getElementById('selectedTotal');
+        const isEnabled = !!enabled;
+
+        if (toggle) {
+          toggle.checked = isEnabled;
+        }
+        if (subtotalInput) {
+          subtotalInput.readOnly = !isEnabled;
+        }
+        updatePriceModeBadge_(isEnabled);
+        if (!isEnabled) {
+          selectedManualUnitPrice = null;
+        }
+      }
+
+      function updatePriceModeBadge_(isManual) {
+        const badge = document.getElementById('priceModeBadge');
+        if (!badge) {
+          return;
+        }
+
+        if (isManual) {
+          badge.textContent = 'MANUAL';
+          badge.classList.remove('auto');
+          badge.classList.add('manual');
+          return;
+        }
+
+        badge.textContent = 'AUTO';
+        badge.classList.remove('manual');
+        badge.classList.add('auto');
+      }
+
+      function onManualPriceToggleChange_() {
+        const enabled = isManualPriceEnabled_();
+        setManualPriceMode_(enabled);
+        updateSelectedPreview();
+      }
+
+      function onSelectedTotalManualInput_() {
+        if (!isManualPriceEnabled_()) {
+          return;
+        }
+
+        const sku = document.getElementById('product').value;
+        const item = productMap[sku];
+        const qty = Number(document.getElementById('qty').value || 0);
+        const inputEl = document.getElementById('selectedTotal');
+        const rawValue = String(inputEl.value || '').trim();
+
+        if (!item || !qty || qty <= 0) {
+          selectedManualUnitPrice = null;
+          return;
+        }
+
+        if (!rawValue) {
+          selectedManualUnitPrice = null;
+          return;
+        }
+
+        const subtotalManual = round2(parseCurrencyNumber_(rawValue));
+        if (subtotalManual < 0) {
+          return;
+        }
+
+        selectedManualUnitPrice = round2(subtotalManual / qty);
       }
 
       function addItemToCart() {
@@ -843,9 +1019,23 @@
           return;
         }
 
-        const existing = cartItems.find(function (row) { return row.sku === sku; });
+        const hargaMaster = round2(Number(item.hargaJual) || 0);
+        const useManualPrice = isManualPriceEnabled_();
+        const hasManualUnitPrice = useManualPrice && !(selectedManualUnitPrice === null || selectedManualUnitPrice === undefined);
+        const hargaManual = hasManualUnitPrice
+          ? Math.max(0, round2(Number(selectedManualUnitPrice) || 0))
+          : hargaMaster;
+        const hargaSatuan = round2(hargaManual);
+        const isManualHarga = hasManualUnitPrice;
+
+        const existing = cartItems.find(function (row) {
+          return row.sku === sku && round2(Number(row.hargaSatuan) || 0) === hargaSatuan;
+        });
         if (existing) {
           existing.qty = round2(existing.qty + qty);
+          if (isManualHarga) {
+            existing.isManualHarga = true;
+          }
           if (itemNote) {
             existing.note = itemNote;
           }
@@ -854,12 +1044,14 @@
             sku: item.sku,
             namaProduk: item.namaProduk,
             satuan: item.satuan,
-            hargaSatuan: Number(item.hargaJual) || 0,
+            hargaSatuan: hargaSatuan,
+            isManualHarga: isManualHarga,
             qty: round2(qty),
             note: itemNote,
           });
         }
 
+        setManualPriceMode_(false);
         document.getElementById('qty').value = '';
         document.getElementById('itemNote').value = '';
         updateSelectedPreview();
@@ -907,6 +1099,7 @@
 
           const total = round2((Number(item.hargaSatuan) || 0) * (Number(item.qty) || 0));
           const noteHtml = item.note ? '<div class="line-note">Catatan: ' + escapeHtml(item.note) + '</div>' : '';
+          const manualPriceHtml = item.isManualHarga ? '<div class="line-note">Harga manual</div>' : '';
 
           tr.innerHTML =
             '<td><div class="line-name">' + escapeHtml(item.namaProduk || item.sku) + '</div>' +
@@ -914,7 +1107,7 @@
             noteHtml +
             '</td>' +
             '<td>' + formatNumber(item.qty || 0) + '</td>' +
-            '<td>' + formatCurrency(item.hargaSatuan || 0) + '</td>' +
+            '<td>' + formatCurrency(item.hargaSatuan || 0) + manualPriceHtml + '</td>' +
             '<td>' + formatCurrency(total) + '</td>' +
             '<td><button class="btn btn-danger" type="button" data-index="' + index + '">Hapus</button></td>';
 
@@ -968,6 +1161,7 @@
             return {
               sku: item.sku,
               qty: item.qty,
+              hargaSatuan: Number(item.hargaSatuan) || 0,
               note: item.note || '',
             };
           }),
@@ -1093,11 +1287,21 @@
               adjusted = true;
             }
 
+            const latestPrice = round2(Number(master.hargaJual) || 0);
+            const previousPrice = round2(Number(item.hargaSatuan) || 0);
+            const keepManualPrice = !!item.isManualHarga;
+            const safeManualPrice = previousPrice >= 0 ? previousPrice : latestPrice;
+            const hargaSatuan = keepManualPrice ? safeManualPrice : latestPrice;
+            if (!keepManualPrice && previousPrice !== latestPrice) {
+              adjusted = true;
+            }
+
             return {
               sku: item.sku,
               namaProduk: master.namaProduk,
               satuan: master.satuan,
-              hargaSatuan: Number(master.hargaJual) || 0,
+              hargaSatuan: hargaSatuan,
+              isManualHarga: keepManualPrice,
               qty: safeQty,
               note: item.note || '',
             };
@@ -1304,6 +1508,53 @@
           currency: 'IDR',
           maximumFractionDigits: 0,
         }).format(Number(value) || 0);
+      }
+
+      function parseCurrencyNumber_(value) {
+        if (typeof value === 'number') {
+          return Number.isFinite(value) ? value : 0;
+        }
+
+        if (value === null || value === undefined || value === '') {
+          return 0;
+        }
+
+        let text = String(value)
+          .replace(/\s+/g, '')
+          .replace(/[^0-9,.-]/g, '');
+
+        if (!text) {
+          return 0;
+        }
+
+        const hasComma = text.indexOf(',') > -1;
+        const hasDot = text.indexOf('.') > -1;
+
+        if (hasComma && hasDot) {
+          if (text.lastIndexOf(',') > text.lastIndexOf('.')) {
+            text = text.replace(/\./g, '').replace(',', '.');
+          } else {
+            text = text.replace(/,/g, '');
+          }
+        } else if (hasComma && !hasDot) {
+          const parts = text.split(',');
+          if (parts.length === 2 && parts[1].length <= 2) {
+            text = parts[0].replace(/\./g, '') + '.' + parts[1];
+          } else {
+            text = text.replace(/,/g, '');
+          }
+        } else if (hasDot && !hasComma) {
+          const parts = text.split('.');
+          const looksLikeThousands = parts.length > 1 && parts.slice(1).every(function (part) {
+            return part.length === 3;
+          });
+          text = looksLikeThousands ? parts.join('') : text;
+        } else {
+          text = text.replace(/,/g, '');
+        }
+
+        const num = parseFloat(text);
+        return Number.isFinite(num) ? num : 0;
       }
 
       function formatNumber(value) {

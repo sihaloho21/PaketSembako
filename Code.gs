@@ -1115,8 +1115,8 @@ function padRowToLength_(row, targetLength) {
  * Simpan transaksi dari form kasir.
  * Mendukung:
  * - mode lama: {customerName, sku, qty, note}
- * - mode cart: {customerName, note, items:[{sku, qty, note?}]}
- * @param {{customerName:string, sku?:string, qty?:number|string, note?:string, items?:Array<{sku:string, qty:number|string, note?:string}>}} payload
+ * - mode cart: {customerName, note, items:[{sku, qty, hargaSatuan?, note?}]}
+ * @param {{customerName:string, sku?:string, qty?:number|string, note?:string, items?:Array<{sku:string, qty:number|string, hargaSatuan?:number|string, note?:string}>}} payload
  */
 function saveKasirTransaction(payload) {
   const lock = LockService.getDocumentLock();
@@ -1183,7 +1183,12 @@ function saveKasirTransaction(payload) {
         );
       }
 
-      const hargaSatuan = round2_(product.hargaJual);
+      const hargaSatuan = item.hasHargaSatuan
+        ? round2_(item.hargaSatuan)
+        : round2_(product.hargaJual);
+      if (hargaSatuan < 0) {
+        throw new Error('Harga item tidak boleh negatif untuk SKU: ' + product.sku);
+      }
       const hargaModalSatuan = round2_(product.hargaModal);
       const total = round2_(hargaSatuan * round2_(item.qty));
       const hpp = round2_(round2_(item.qty) * hargaModalSatuan);
@@ -1200,6 +1205,7 @@ function saveKasirTransaction(payload) {
         total: total,
         hpp: hpp,
         labaKotor: labaKotor,
+        manualPrice: !!item.hasHargaSatuan,
         note: safeText_(item.note) || invoiceNote,
         stokSisa: round2_(availableStock - requestedQty),
       };
@@ -1261,6 +1267,7 @@ function saveKasirTransaction(payload) {
           total: item.total,
           hpp: item.hpp,
           labaKotor: item.labaKotor,
+          manualPrice: item.manualPrice,
           stokSisa: item.stokSisa,
         })),
       },
@@ -2998,13 +3005,21 @@ function countDistinctTransactions_(salesRows) {
 function normalizeTransactionItems_(payload) {
   const items = Array.isArray(payload && payload.items)
     ? payload.items
-    : [{ sku: payload && payload.sku, qty: payload && payload.qty, note: payload && payload.note }];
+    : [{
+      sku: payload && payload.sku,
+      qty: payload && payload.qty,
+      hargaSatuan: payload && payload.hargaSatuan,
+      note: payload && payload.note,
+    }];
 
   const normalized = [];
   items.forEach((item, idx) => {
     const sku = safeText_(item && item.sku);
     const qty = round2_(toNumber_(item && item.qty));
     const note = safeText_(item && item.note);
+    const hasHargaSatuan = item && item.hargaSatuan !== undefined && item.hargaSatuan !== null &&
+      safeText_(item.hargaSatuan) !== '';
+    const hargaSatuan = hasHargaSatuan ? round2_(toNumber_(item.hargaSatuan)) : 0;
 
     if (!sku && !qty) {
       return;
@@ -3015,10 +3030,15 @@ function normalizeTransactionItems_(payload) {
     if (!qty || qty <= 0) {
       throw new Error('Qty item ke-' + (idx + 1) + ' harus lebih dari 0.');
     }
+    if (hasHargaSatuan && hargaSatuan < 0) {
+      throw new Error('Harga item ke-' + (idx + 1) + ' tidak boleh negatif.');
+    }
 
     normalized.push({
       sku: sku,
       qty: qty,
+      hasHargaSatuan: !!hasHargaSatuan,
+      hargaSatuan: hargaSatuan,
       note: note,
     });
   });
