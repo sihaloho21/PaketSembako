@@ -139,6 +139,10 @@
         color: #23486a;
       }
 
+      #productSearch {
+        margin-bottom: 8px;
+      }
+
       .checkbox-inline {
         display: flex;
         align-items: center;
@@ -629,14 +633,17 @@
           </select>
         </div>
 
-        <div>
-          <label for="productSearch">Search Produk</label>
-          <input id="productSearch" type="text" placeholder="Cari SKU / nama produk" autocomplete="off" />
-        </div>
-
         <div class="product-row">
           <div>
             <label for="product">Produk (SKU)</label>
+            <input
+              id="productSearch"
+              type="text"
+              list="productSuggestList"
+              placeholder="Cari SKU / nama produk, lalu pilih saran"
+              autocomplete="off"
+            />
+            <datalist id="productSuggestList"></datalist>
             <select id="product">
               <option value="">Memuat data produk...</option>
             </select>
@@ -754,9 +761,10 @@
         applySidebarDensityMode_();
         window.addEventListener('resize', applySidebarDensityMode_);
 
-        document.getElementById('product').addEventListener('change', onProductChange);
+        document.getElementById('product').addEventListener('change', onProductSelectChange_);
         document.getElementById('categoryFilter').addEventListener('change', onCategoryFilterChange_);
         document.getElementById('productSearch').addEventListener('input', onProductSearchInput_);
+        document.getElementById('productSearch').addEventListener('change', onProductSearchCommit_);
         document.getElementById('qty').addEventListener('input', updateSelectedPreview);
         document.getElementById('manualPriceToggle').addEventListener('change', onManualPriceToggleChange_);
         document.getElementById('selectedTotal').addEventListener('input', onSelectedTotalManualInput_);
@@ -842,7 +850,13 @@
         });
         categorySelect.value = validSelectedCategory;
 
-        renderProductOptionsByFilter_(validSelectedCategory, currentSearch, selectedSku);
+        refreshProductSuggestions_(validSelectedCategory, currentSearch);
+        const matchedSkuFromSearch = findSkuBySearchTerm_(currentSearch, validSelectedCategory);
+        const preferredSku = matchedSkuFromSearch || (normalizeSearchText_(currentSearch) ? '' : selectedSku);
+        renderProductOptionsByFilter_(validSelectedCategory, currentSearch, preferredSku);
+        if (matchedSkuFromSearch) {
+          productSelect.value = matchedSkuFromSearch;
+        }
 
         const stockSelect = document.getElementById('stockSku');
         const selectedStockSku = stockSelect.value;
@@ -871,19 +885,43 @@
         updateStockPreview_();
       }
 
-      function onCategoryFilterChange_() {
-        const filterValue = document.getElementById('categoryFilter').value;
-        const currentSku = document.getElementById('product').value;
-        const searchTerm = getProductSearchTerm_();
-        renderProductOptionsByFilter_(filterValue, searchTerm, currentSku);
+      function onProductSelectChange_() {
+        const sku = document.getElementById('product').value;
+        syncProductSearchWithSku_(sku);
         onProductChange();
       }
 
+      function onCategoryFilterChange_() {
+        applyProductSearchFilter_({ syncSearchLabel: false });
+      }
+
       function onProductSearchInput_() {
+        applyProductSearchFilter_({ syncSearchLabel: false });
+      }
+
+      function onProductSearchCommit_() {
+        applyProductSearchFilter_({ syncSearchLabel: true });
+      }
+
+      function applyProductSearchFilter_(options) {
+        const opts = options || {};
         const filterValue = document.getElementById('categoryFilter').value;
-        const currentSku = document.getElementById('product').value;
+        const select = document.getElementById('product');
+        const currentSku = select.value;
         const searchTerm = getProductSearchTerm_();
-        renderProductOptionsByFilter_(filterValue, searchTerm, currentSku);
+
+        refreshProductSuggestions_(filterValue, searchTerm);
+        const matchedSku = findSkuBySearchTerm_(searchTerm, filterValue);
+        const preferredSku = matchedSku || (normalizeSearchText_(searchTerm) ? '' : currentSku);
+
+        renderProductOptionsByFilter_(filterValue, searchTerm, preferredSku);
+        if (matchedSku) {
+          select.value = matchedSku;
+          if (opts.syncSearchLabel) {
+            syncProductSearchWithSku_(matchedSku);
+          }
+        }
+
         onProductChange();
       }
 
@@ -925,6 +963,85 @@
         });
       }
 
+      function getSuggestProductsByFilter_(categoryValue, searchTerm) {
+        const keyword = normalizeSearchText_(searchTerm);
+        const source = getFilteredProductsByFilter_(categoryValue, '');
+        if (!keyword) {
+          return source
+            .slice()
+            .sort(function (a, b) {
+              return safeText_(a.namaProduk).localeCompare(safeText_(b.namaProduk), 'id');
+            })
+            .slice(0, 40);
+        }
+
+        return source
+          .map(function (item) {
+            return { item: item, score: getProductSearchScore_(item, keyword) };
+          })
+          .filter(function (entry) {
+            return entry.score > 0;
+          })
+          .sort(function (a, b) {
+            return b.score - a.score || safeText_(a.item.namaProduk).localeCompare(safeText_(b.item.namaProduk), 'id');
+          })
+          .slice(0, 40)
+          .map(function (entry) {
+            return entry.item;
+          });
+      }
+
+      function getProductSearchScore_(item, keyword) {
+        const sku = normalizeSearchText_(item && item.sku);
+        const nama = normalizeSearchText_(item && item.namaProduk);
+        const kategori = normalizeSearchText_(item && item.kategori);
+
+        if (!keyword) {
+          return 1;
+        }
+        if (sku === keyword) {
+          return 120;
+        }
+        if (nama === keyword) {
+          return 110;
+        }
+        if (sku.indexOf(keyword) === 0) {
+          return 95;
+        }
+        if (nama.indexOf(keyword) === 0) {
+          return 85;
+        }
+        if (kategori.indexOf(keyword) === 0) {
+          return 60;
+        }
+        if (sku.indexOf(keyword) > -1) {
+          return 50;
+        }
+        if (nama.indexOf(keyword) > -1) {
+          return 40;
+        }
+        if (kategori.indexOf(keyword) > -1) {
+          return 20;
+        }
+        return 0;
+      }
+
+      function refreshProductSuggestions_(categoryValue, searchTerm) {
+        const datalist = document.getElementById('productSuggestList');
+        if (!datalist) {
+          return;
+        }
+
+        const suggestions = getSuggestProductsByFilter_(categoryValue, searchTerm);
+        datalist.innerHTML = '';
+        suggestions.forEach(function (item) {
+          const opt = document.createElement('option');
+          opt.value = buildProductSearchLabel_(item);
+          opt.textContent = (safeText_(item.kategori) || 'Tanpa Kategori') + ' | Stok: ' + formatNumber(item.stokTersedia);
+          datalist.appendChild(opt);
+        });
+      }
+
       function renderProductOptionsByFilter_(categoryValue, searchTerm, preferredSku) {
         const select = document.getElementById('product');
         const filteredProducts = getFilteredProductsByFilter_(categoryValue, searchTerm);
@@ -953,6 +1070,69 @@
       function getProductSearchTerm_() {
         const searchInput = document.getElementById('productSearch');
         return searchInput ? searchInput.value : '';
+      }
+
+      function findSkuBySearchTerm_(searchTerm, categoryValue) {
+        const keyword = normalizeSearchText_(searchTerm);
+        if (!keyword) {
+          return '';
+        }
+
+        const candidates = getFilteredProductsByFilter_(categoryValue, '');
+        const allowedBySku = {};
+        const exactNameMatches = [];
+
+        for (let i = 0; i < candidates.length; i += 1) {
+          const item = candidates[i];
+          const sku = safeText_(item.sku);
+          allowedBySku[sku] = true;
+
+          if (normalizeSearchText_(sku) === keyword) {
+            return sku;
+          }
+
+          if (normalizeSearchText_(buildProductSearchLabel_(item)) === keyword) {
+            return sku;
+          }
+
+          if (normalizeSearchText_(item.namaProduk) === keyword) {
+            exactNameMatches.push(sku);
+          }
+        }
+
+        if (exactNameMatches.length === 1) {
+          return exactNameMatches[0];
+        }
+
+        const maybeSku = normalizeSku_(String(searchTerm).split('-')[0]);
+        if (maybeSku && allowedBySku[maybeSku]) {
+          return maybeSku;
+        }
+
+        const suggestions = getSuggestProductsByFilter_(categoryValue, keyword);
+        if (suggestions.length === 1 && keyword.length >= 3) {
+          const one = suggestions[0];
+          const skuText = normalizeSearchText_(one.sku);
+          const namaText = normalizeSearchText_(one.namaProduk);
+          if (skuText.indexOf(keyword) === 0 || namaText.indexOf(keyword) === 0) {
+            return one.sku;
+          }
+        }
+
+        return '';
+      }
+
+      function buildProductSearchLabel_(item) {
+        return safeText_(item && item.sku) + ' - ' + safeText_(item && item.namaProduk);
+      }
+
+      function syncProductSearchWithSku_(sku) {
+        const item = productMap[safeText_(sku)];
+        const input = document.getElementById('productSearch');
+        if (!input || !item) {
+          return;
+        }
+        input.value = buildProductSearchLabel_(item);
       }
 
       function renderSummary(summary) {
@@ -1666,6 +1846,17 @@
       function normalizeCategoryLabel_(value) {
         const text = value === null || value === undefined ? '' : String(value).trim();
         return text || '';
+      }
+
+      function safeText_(value) {
+        if (value === null || value === undefined) {
+          return '';
+        }
+        return String(value).trim();
+      }
+
+      function normalizeSku_(value) {
+        return safeText_(value).toUpperCase();
       }
 
       function normalizeSearchText_(value) {
