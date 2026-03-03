@@ -568,6 +568,16 @@ function parseApiPayload_(e) {
  */
 function parseQueryString_(text) {
   const result = {};
+  const safeDecode = function (raw) {
+    const normalized = String(raw || '').replace(/\+/g, ' ');
+    try {
+      return decodeURIComponent(normalized);
+    } catch (err) {
+      // Biarkan teks mentah bila encoding URL tidak valid.
+      return normalized;
+    }
+  };
+
   String(text || '')
     .split('&')
     .forEach((part) => {
@@ -577,8 +587,8 @@ function parseQueryString_(text) {
       const idx = part.indexOf('=');
       const key = idx > -1 ? part.slice(0, idx) : part;
       const val = idx > -1 ? part.slice(idx + 1) : '';
-      const decodedKey = decodeURIComponent(String(key).replace(/\+/g, ' '));
-      const decodedVal = decodeURIComponent(String(val).replace(/\+/g, ' '));
+      const decodedKey = safeDecode(key);
+      const decodedVal = safeDecode(val);
       if (decodedKey) {
         result[decodedKey] = decodedVal;
       }
@@ -3054,7 +3064,7 @@ function generateInvoiceNumber_(timezone) {
   const props = PropertiesService.getDocumentProperties();
   const datePart = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
   const seqKey = 'invoice_seq_' + datePart;
-  const nextSeq = Number(props.getProperty(seqKey) || '0') + 1;
+  const nextSeq = toSafeInt_(props.getProperty(seqKey), 0) + 1;
   props.setProperty(seqKey, String(nextSeq));
   return 'INV-' + datePart + '-' + Utilities.formatString('%04d', nextSeq);
 }
@@ -3148,8 +3158,31 @@ function toNumber_(value) {
  * Konversi ke Date (tanpa jam).
  */
 function toDateOnly_(value) {
+  const buildDateIfValid = function (year, monthIndex, day) {
+    const dt = new Date(year, monthIndex, day);
+    if (Number.isNaN(dt.getTime())) {
+      return null;
+    }
+    if (dt.getFullYear() !== year || dt.getMonth() !== monthIndex || dt.getDate() !== day) {
+      return null;
+    }
+    return dt;
+  };
+
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const serialDays = Math.floor(value);
+    if (serialDays > 0) {
+      const excelEpochUtcMs = Date.UTC(1899, 11, 30);
+      const millisPerDay = 24 * 60 * 60 * 1000;
+      const utcDate = new Date(excelEpochUtcMs + (serialDays * millisPerDay));
+      if (!Number.isNaN(utcDate.getTime())) {
+        return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate());
+      }
+    }
   }
 
   if (!value) {
@@ -3157,9 +3190,16 @@ function toDateOnly_(value) {
   }
 
   const text = String(value).trim();
-  const parsed = new Date(text);
-  if (!Number.isNaN(parsed.getTime())) {
-    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  if (!text) {
+    return null;
+  }
+
+  const isoYmd = text.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  if (isoYmd) {
+    const year = parseInt(isoYmd[1], 10);
+    const month = parseInt(isoYmd[2], 10) - 1;
+    const day = parseInt(isoYmd[3], 10);
+    return buildDateIfValid(year, month, day);
   }
 
   const dmY = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
@@ -3170,10 +3210,12 @@ function toDateOnly_(value) {
     }
     const month = parseInt(dmY[2], 10) - 1;
     const day = parseInt(dmY[1], 10);
-    const dt = new Date(year, month, day);
-    if (!Number.isNaN(dt.getTime())) {
-      return dt;
-    }
+    return buildDateIfValid(year, month, day);
+  }
+
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
   }
 
   return null;
@@ -3195,7 +3237,7 @@ function formatDateKey_(dateKey, timezone) {
  */
 function getDashboardVersion_() {
   const props = PropertiesService.getDocumentProperties();
-  return Number(props.getProperty(APP_CONFIG.cacheVersionKey) || '0');
+  return toSafeInt_(props.getProperty(APP_CONFIG.cacheVersionKey), 0);
 }
 
 /**
@@ -3203,8 +3245,25 @@ function getDashboardVersion_() {
  */
 function bumpDashboardVersion_() {
   const props = PropertiesService.getDocumentProperties();
-  const currentVersion = Number(props.getProperty(APP_CONFIG.cacheVersionKey) || '0');
+  const currentVersion = toSafeInt_(props.getProperty(APP_CONFIG.cacheVersionKey), 0);
   props.setProperty(APP_CONFIG.cacheVersionKey, String(currentVersion + 1));
+}
+
+/**
+ * Konversi ke bilangan bulat aman dengan fallback.
+ */
+function toSafeInt_(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return Number(fallback) || 0;
+  }
+
+  const intVal = Math.floor(num);
+  if (intVal < 0) {
+    return Number(fallback) || 0;
+  }
+
+  return intVal;
 }
 
 /**
