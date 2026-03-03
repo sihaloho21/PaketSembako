@@ -323,7 +323,8 @@
 
     <script>
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
-      const API_BASE = resolveApiBase_();
+      const APP_PRIVATE_MODE = true;
+      const API_BASE = APP_PRIVATE_MODE ? '' : resolveApiBase_();
 
       function init() {
         document.getElementById('btnKasir').addEventListener('click', function () {
@@ -342,9 +343,9 @@
           loadStatus();
         });
 
-        if (!isAppsScriptRuntime_() && !API_BASE) {
+        if (!isAppsScriptRuntime_()) {
           document.getElementById('metaInfo').textContent =
-            'Mode Netlify aktif, tapi endpoint API belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL.';
+            'Mode private aktif. Buka aplikasi lewat URL Web App Google Apps Script, bukan dari Netlify.';
           return;
         }
 
@@ -373,16 +374,7 @@
           return;
         }
 
-        if (!API_BASE) {
-          onFailure(new Error('API endpoint belum diset.'));
-          return;
-        }
-
-        const url = new URL(API_BASE);
-        url.searchParams.set('action', 'status');
-        fetchApiJson_(url.toString(), { method: 'GET', cache: 'no-store' })
-          .then(onSuccess)
-          .catch(onFailure);
+        onFailure(new Error('Mode private aktif. Jalankan halaman ini dari Web App Apps Script.'));
       }
 
       function renderStatus(payload) {
@@ -434,17 +426,8 @@
           return;
         }
 
-        let fileName = 'Dashboard.html';
-        if (view === 'kasir') {
-          fileName = 'Kasir.html';
-        } else if (view === 'produk') {
-          fileName = 'Produk.html';
-        }
-        const url = new URL(fileName, window.location.href);
-        if (API_BASE) {
-          url.searchParams.set('apiBase', API_BASE);
-        }
-        window.location.href = url.toString();
+        document.getElementById('metaInfo').textContent =
+          'Mode private aktif. Navigasi tersedia jika dibuka dari Web App Apps Script.';
       }
 
       function withViewParam_(view) {

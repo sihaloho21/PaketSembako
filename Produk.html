@@ -672,7 +672,8 @@
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_KEY_STORAGE_KEY = 'paketsembako_api_key';
-      const API_BASE = resolveApiBase_();
+      const APP_PRIVATE_MODE = true;
+      const API_BASE = APP_PRIVATE_MODE ? '' : resolveApiBase_();
       const API_KEY = resolveApiKey_();
 
       function init() {
@@ -699,15 +700,15 @@
         document.getElementById('productTableBody').addEventListener('click', onProductTableAction_);
         document.getElementById('productTableHead').addEventListener('click', onTableHeadSortClick_);
 
-        if (!isAppsScriptRuntime_() && !API_BASE) {
+        if (!isAppsScriptRuntime_()) {
           setLoading(true);
           setStatus(
-            'Runtime Apps Script tidak terdeteksi. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
+            'Mode private aktif. Jalankan halaman Produk dari Web App Apps Script.',
             true
           );
           renderWarnings_([
-            'Mode Netlify membutuhkan endpoint API Apps Script.',
-            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
+            'Runtime Apps Script tidak terdeteksi.',
+            'Buka halaman Produk dari URL Web App Google Apps Script, bukan dari Netlify.',
           ]);
           return;
         }
@@ -1423,12 +1424,7 @@
         const success = typeof onSuccess === 'function' ? onSuccess : function () {};
         const failure = typeof onFailure === 'function' ? onFailure : function () {};
 
-        if (!API_BASE) {
-          failure(new Error('API endpoint belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec.'));
-          return;
-        }
-
-        callApi_(functionName, payload).then(success).catch(failure);
+        failure(new Error('Mode private aktif. Jalankan halaman Produk dari Web App Apps Script.'));
       }
 
       function callApi_(functionName, payload) {
@@ -1595,20 +1591,7 @@
           return;
         }
 
-        const fileMap = {
-          kasir: 'Kasir.html',
-          produk: 'Produk.html',
-          dashboard: 'Dashboard.html',
-        };
-        const targetFile = fileMap[view] || 'Produk.html';
-        const url = new URL(targetFile, window.location.href);
-        if (API_BASE) {
-          url.searchParams.set('apiBase', API_BASE);
-        }
-        if (API_KEY) {
-          url.searchParams.set('apiKey', API_KEY);
-        }
-        window.location.href = url.toString();
+        setStatus('Mode private aktif. Navigasi tersedia jika dibuka dari Web App Apps Script.', true);
       }
 
       function withViewParam_(view) {

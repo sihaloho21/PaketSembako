@@ -1019,7 +1019,8 @@
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_KEY_STORAGE_KEY = 'paketsembako_api_key';
-      const API_BASE = resolveApiBase_();
+      const APP_PRIVATE_MODE = true;
+      const API_BASE = APP_PRIVATE_MODE ? '' : resolveApiBase_();
       const API_KEY = resolveApiKey_();
 
       function init() {
@@ -1046,13 +1047,13 @@
         document.getElementById('stockQty').addEventListener('input', updateStockPreview_);
         document.getElementById('btnStockAdd').addEventListener('click', saveStockMutationFromForm_);
 
-        if (!isAppsScriptRuntime_() && !API_BASE) {
+        if (!isAppsScriptRuntime_()) {
           setLoading(true);
           setStatus(getMissingApiMessage_(), true);
           renderWarning([
             'Runtime Apps Script tidak terdeteksi.',
-            'Mode Netlify membutuhkan endpoint API Apps Script.',
-            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
+            'Mode private aktif.',
+            'Buka halaman Kasir dari URL Web App Google Apps Script, bukan dari Netlify.',
           ]);
           return;
         }
@@ -1926,12 +1927,7 @@
         const success = typeof onSuccess === 'function' ? onSuccess : function () {};
         const failure = typeof onFailure === 'function' ? onFailure : function () {};
 
-        if (!API_BASE) {
-          failure(new Error(getMissingApiMessage_()));
-          return;
-        }
-
-        callApi_(functionName, payload).then(success).catch(failure);
+        failure(new Error(getMissingApiMessage_()));
       }
 
       function callApi_(functionName, payload) {
@@ -1967,7 +1963,13 @@
           options.body = JSON.stringify(writePayload);
         }
 
-        const response = await fetch(url.toString(), options);
+        let response;
+        try {
+          response = await fetch(url.toString(), options);
+        } catch (err) {
+          clearStoredApiBase_();
+          throw new Error(getApiConnectionErrorMessage_());
+        }
         let json;
 
         try {
@@ -2009,7 +2011,11 @@
         }
 
         try {
-          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          if (!storedApi) {
+            clearStoredApiBase_();
+          }
+          return storedApi;
         } catch (err) {
           return '';
         }
@@ -2071,20 +2077,7 @@
           return;
         }
 
-        const fileMap = {
-          kasir: 'Kasir.html',
-          produk: 'Produk.html',
-          dashboard: 'Dashboard.html',
-        };
-        const targetFile = fileMap[view] || 'Kasir.html';
-        const url = new URL(targetFile, window.location.href);
-        if (API_BASE) {
-          url.searchParams.set('apiBase', API_BASE);
-        }
-        if (API_KEY) {
-          url.searchParams.set('apiKey', API_KEY);
-        }
-        window.location.href = url.toString();
+        setStatus(getMissingApiMessage_(), true);
       }
 
       function withViewParam_(view) {
@@ -2134,11 +2127,31 @@
         if (!text) {
           return '';
         }
-        return text.replace(/\/+$/, '');
+
+        const sanitized = text.replace(/[?#].*$/, '').replace(/\/+$/, '');
+        if (!/^https?:\/\//i.test(sanitized)) {
+          return '';
+        }
+        if (sanitized.indexOf('<') > -1 || sanitized.indexOf('>') > -1) {
+          return '';
+        }
+        return sanitized;
+      }
+
+      function clearStoredApiBase_() {
+        try {
+          localStorage.removeItem(API_BASE_STORAGE_KEY);
+        } catch (err) {
+          // Abaikan jika storage tidak tersedia.
+        }
       }
 
       function getMissingApiMessage_() {
-        return 'API endpoint belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman Kasir.';
+        return 'Mode private aktif. Jalankan halaman Kasir dari Web App Apps Script.';
+      }
+
+      function getApiConnectionErrorMessage_() {
+        return 'Koneksi ke endpoint API gagal. Periksa apiBase dan pastikan Apps Script Web App masih aktif.';
       }
 
       function applySidebarDensityMode_() {
@@ -2212,7 +2225,11 @@
         if (!error) {
           return 'Unknown error';
         }
-        return error.message || String(error);
+        const message = error.message || String(error);
+        if (/failed to fetch/i.test(message)) {
+          return getApiConnectionErrorMessage_();
+        }
+        return message;
       }
 
       function formatCurrency(value) {
