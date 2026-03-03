@@ -671,7 +671,9 @@
       let tableSortDirection = 'asc';
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
+      const API_KEY_STORAGE_KEY = 'paketsembako_api_key';
       const API_BASE = resolveApiBase_();
+      const API_KEY = resolveApiKey_();
 
       function init() {
         setupPageMenu_('produk');
@@ -1455,8 +1457,14 @@
         };
 
         if (method === 'POST') {
+          const writePayload = payload && typeof payload === 'object' && !Array.isArray(payload)
+            ? Object.assign({}, payload)
+            : {};
+          if (API_KEY && !writePayload.apiKey) {
+            writePayload.apiKey = API_KEY;
+          }
           options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
-          options.body = JSON.stringify(payload || {});
+          options.body = JSON.stringify(writePayload);
         }
 
         const response = await fetch(url.toString(), options);
@@ -1531,6 +1539,34 @@
         }
       }
 
+      function resolveApiKey_() {
+        const queryKey = safeText_(new URL(window.location.href).searchParams.get('apiKey'));
+        if (queryKey) {
+          try {
+            localStorage.setItem(API_KEY_STORAGE_KEY, queryKey);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return queryKey;
+        }
+
+        const windowKey = safeText_(window.APP_API_KEY);
+        if (windowKey) {
+          try {
+            localStorage.setItem(API_KEY_STORAGE_KEY, windowKey);
+          } catch (err) {
+            // Abaikan jika storage tidak tersedia.
+          }
+          return windowKey;
+        }
+
+        try {
+          return safeText_(localStorage.getItem(API_KEY_STORAGE_KEY));
+        } catch (err) {
+          return '';
+        }
+      }
+
       function setupPageMenu_(activeView) {
         const menu = document.getElementById('pageMenu');
         if (!menu) {
@@ -1568,6 +1604,9 @@
         const url = new URL(targetFile, window.location.href);
         if (API_BASE) {
           url.searchParams.set('apiBase', API_BASE);
+        }
+        if (API_KEY) {
+          url.searchParams.set('apiKey', API_KEY);
         }
         window.location.href = url.toString();
       }
