@@ -2001,7 +2001,11 @@
         }
 
         try {
-          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          if (storedApi) {
+            localStorage.setItem(API_BASE_STORAGE_KEY, storedApi);
+          }
+          return storedApi;
         } catch (err) {
           return '';
         }
@@ -2095,7 +2099,9 @@
         if (!text) {
           return '';
         }
-        return text.replace(/\/+$/, '');
+        return text
+          .replace(/[?#].*$/, '')
+          .replace(/\/+$/, '');
       }
 
       function getMissingApiMessage_() {
