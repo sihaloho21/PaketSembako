@@ -6,7 +6,7 @@
   // Set endpoint API default per host agar pengguna tidak perlu ?apiBase=.
   // Isi URL Web App Apps Script sekali di sini.
   var API_BASE_BY_HOST = {
-    "kasir-paketsembako.netlify.app": "",
+    "kasir-paketsembako.netlify.app": "https://script.google.com/macros/s/AKfycbynwcf2m6CEQx5ZsBvDFPbQScSC02-em9mDfQehRjDMlzoviJlRarQDJ5uTX2zHeKXqjg/exec",
   };
 
   function sanitize(value) {
