@@ -321,7 +321,6 @@
       </section>
     </main>
 
-    <script src="app-config.js"></script>
     <script>
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_BASE = resolveApiBase_();
@@ -345,7 +344,7 @@
 
         if (!isAppsScriptRuntime_() && !API_BASE) {
           document.getElementById('metaInfo').textContent =
-            'Mode Netlify aktif, tapi endpoint API belum diset. Isi app-config.js atau tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL.';
+            'Mode Netlify aktif, tapi endpoint API belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL.';
           return;
         }
 
@@ -375,7 +374,7 @@
         }
 
         if (!API_BASE) {
-          onFailure(new Error('API endpoint belum diset. Isi app-config.js atau parameter ?apiBase=.'));
+          onFailure(new Error('API endpoint belum diset.'));
           return;
         }
 
@@ -497,11 +496,7 @@
         }
 
         try {
-          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
-          if (storedApi) {
-            localStorage.setItem(API_BASE_STORAGE_KEY, storedApi);
-          }
-          return storedApi;
+          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
         } catch (err) {
           return '';
         }
@@ -512,9 +507,7 @@
         if (!text) {
           return '';
         }
-        return text
-          .replace(/[?#].*$/, '')
-          .replace(/\/+$/, '');
+        return text.replace(/\/+$/, '');
       }
 
       function isAppsScriptRuntime_() {

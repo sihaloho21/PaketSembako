@@ -600,7 +600,6 @@
 
     <div class="loading" id="loadingFlag">Memuat dashboard...</div>
 
-    <script src="app-config.js"></script>
     <script>
       let lineChart;
       let barChart;
@@ -624,7 +623,7 @@
         if (!isAppsScriptRuntime_() && !API_BASE) {
           showWarning([
             'Endpoint API belum dikonfigurasi untuk mode Netlify.',
-            'Isi app-config.js atau tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL Dashboard.',
+            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL Dashboard.',
           ]);
           return;
         }
@@ -665,7 +664,7 @@
         }
 
         if (!API_BASE) {
-          onFailure(new Error('API endpoint belum diset. Isi app-config.js atau parameter ?apiBase=.'));
+          onFailure(new Error('API endpoint belum diset.'));
           return;
         }
 
@@ -722,11 +721,7 @@
         }
 
         try {
-          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
-          if (storedApi) {
-            localStorage.setItem(API_BASE_STORAGE_KEY, storedApi);
-          }
-          return storedApi;
+          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
         } catch (err) {
           return '';
         }
@@ -737,9 +732,7 @@
         if (!text) {
           return '';
         }
-        return text
-          .replace(/[?#].*$/, '')
-          .replace(/\/+$/, '');
+        return text.replace(/\/+$/, '');
       }
 
       function setupPageMenu_(activeView) {

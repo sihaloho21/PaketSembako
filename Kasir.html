@@ -1009,7 +1009,6 @@
       <div class="warn" id="warn"></div>
     </div>
 
-    <script src="app-config.js"></script>
     <script>
       let products = [];
       let productMap = {};
@@ -1051,7 +1050,7 @@
           renderWarning([
             'Runtime Apps Script tidak terdeteksi.',
             'Mode Netlify membutuhkan endpoint API Apps Script.',
-            'Isi app-config.js atau tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
+            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
           ]);
           return;
         }
@@ -2002,11 +2001,7 @@
         }
 
         try {
-          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
-          if (storedApi) {
-            localStorage.setItem(API_BASE_STORAGE_KEY, storedApi);
-          }
-          return storedApi;
+          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
         } catch (err) {
           return '';
         }
@@ -2100,13 +2095,11 @@
         if (!text) {
           return '';
         }
-        return text
-          .replace(/[?#].*$/, '')
-          .replace(/\/+$/, '');
+        return text.replace(/\/+$/, '');
       }
 
       function getMissingApiMessage_() {
-        return 'API endpoint belum diset. Isi app-config.js atau tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman Kasir.';
+        return 'API endpoint belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman Kasir.';
       }
 
       function applySidebarDensityMode_() {
