@@ -661,6 +661,7 @@
       <div class="warn" id="warn"></div>
     </div>
 
+    <script src="app-config.js"></script>
     <script>
       let products = [];
       let productMap = {};
@@ -700,12 +701,12 @@
         if (!isAppsScriptRuntime_() && !API_BASE) {
           setLoading(true);
           setStatus(
-            'Runtime Apps Script tidak terdeteksi. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
+            'Runtime Apps Script tidak terdeteksi. Isi app-config.js atau tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
             true
           );
           renderWarnings_([
             'Mode Netlify membutuhkan endpoint API Apps Script.',
-            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
+            'Isi app-config.js atau tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL halaman ini.',
           ]);
           return;
         }
@@ -1422,7 +1423,7 @@
         const failure = typeof onFailure === 'function' ? onFailure : function () {};
 
         if (!API_BASE) {
-          failure(new Error('API endpoint belum diset. Tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec.'));
+          failure(new Error('API endpoint belum diset. Isi app-config.js atau tambahkan ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec.'));
           return;
         }
 

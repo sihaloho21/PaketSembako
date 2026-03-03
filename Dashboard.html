@@ -600,6 +600,7 @@
 
     <div class="loading" id="loadingFlag">Memuat dashboard...</div>
 
+    <script src="app-config.js"></script>
     <script>
       let lineChart;
       let barChart;
@@ -623,7 +624,7 @@
         if (!isAppsScriptRuntime_() && !API_BASE) {
           showWarning([
             'Endpoint API belum dikonfigurasi untuk mode Netlify.',
-            'Tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL Dashboard.',
+            'Isi app-config.js atau tambahkan query ?apiBase=<URL_WEB_APP_APPS_SCRIPT>/exec pada URL Dashboard.',
           ]);
           return;
         }
@@ -664,7 +665,7 @@
         }
 
         if (!API_BASE) {
-          onFailure(new Error('API endpoint belum diset.'));
+          onFailure(new Error('API endpoint belum diset. Isi app-config.js atau parameter ?apiBase=.'));
           return;
         }
 
