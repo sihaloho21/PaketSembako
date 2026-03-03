@@ -672,8 +672,8 @@
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_KEY_STORAGE_KEY = 'paketsembako_api_key';
-      const APP_PRIVATE_MODE = true;
-      const API_BASE = APP_PRIVATE_MODE ? '' : resolveApiBase_();
+      const DEFAULT_API_PROXY_PATH = '/.netlify/functions/gas-proxy';
+      const API_BASE = resolveApiBase_();
       const API_KEY = resolveApiKey_();
 
       function init() {
@@ -700,15 +700,15 @@
         document.getElementById('productTableBody').addEventListener('click', onProductTableAction_);
         document.getElementById('productTableHead').addEventListener('click', onTableHeadSortClick_);
 
-        if (!isAppsScriptRuntime_()) {
+        if (!isAppsScriptRuntime_() && !API_BASE) {
           setLoading(true);
           setStatus(
-            'Mode private aktif. Jalankan halaman Produk dari Web App Apps Script.',
+            'Endpoint API belum tersedia untuk mode Netlify.',
             true
           );
           renderWarnings_([
             'Runtime Apps Script tidak terdeteksi.',
-            'Buka halaman Produk dari URL Web App Google Apps Script, bukan dari Netlify.',
+            'Pastikan Netlify Function gas-proxy aktif.',
           ]);
           return;
         }
@@ -1424,7 +1424,12 @@
         const success = typeof onSuccess === 'function' ? onSuccess : function () {};
         const failure = typeof onFailure === 'function' ? onFailure : function () {};
 
-        failure(new Error('Mode private aktif. Jalankan halaman Produk dari Web App Apps Script.'));
+        if (!API_BASE) {
+          failure(new Error('API endpoint belum diset. Pastikan proxy Netlify aktif atau isi ?apiBase=...'));
+          return;
+        }
+
+        callApi_(functionName, payload).then(success).catch(failure);
       }
 
       function callApi_(functionName, payload) {
@@ -1444,7 +1449,7 @@
       }
 
       async function fetchApi_(action, method, payload) {
-        const url = new URL(API_BASE);
+        const url = new URL(API_BASE, window.location.origin);
         url.searchParams.set('action', action);
 
         const options = {
@@ -1529,10 +1534,15 @@
         }
 
         try {
-          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          if (storedApi) {
+            return storedApi;
+          }
         } catch (err) {
-          return '';
+          // Abaikan jika storage tidak tersedia.
         }
+
+        return DEFAULT_API_PROXY_PATH;
       }
 
       function resolveApiKey_() {
@@ -1591,7 +1601,20 @@
           return;
         }
 
-        setStatus('Mode private aktif. Navigasi tersedia jika dibuka dari Web App Apps Script.', true);
+        const fileMap = {
+          kasir: 'Kasir.html',
+          produk: 'Produk.html',
+          dashboard: 'Dashboard.html',
+        };
+        const targetFile = fileMap[view] || 'Produk.html';
+        const url = new URL(targetFile, window.location.href);
+        if (API_BASE && API_BASE !== DEFAULT_API_PROXY_PATH) {
+          url.searchParams.set('apiBase', API_BASE);
+        }
+        if (API_KEY) {
+          url.searchParams.set('apiKey', API_KEY);
+        }
+        window.location.href = url.toString();
       }
 
       function withViewParam_(view) {
@@ -1641,7 +1664,25 @@
         if (!text) {
           return '';
         }
-        return text.replace(/\/+$/, '');
+
+        const sanitized = text.replace(/[?#].*$/, '').replace(/\/+$/, '');
+        if (sanitized.indexOf('<') > -1 || sanitized.indexOf('>') > -1) {
+          return '';
+        }
+
+        if (/^https?:\/\//i.test(sanitized)) {
+          try {
+            const targetOrigin = new URL(sanitized).origin;
+            if (targetOrigin !== window.location.origin) {
+              return '';
+            }
+          } catch (err) {
+            return '';
+          }
+          return sanitized;
+        }
+
+        return sanitized.indexOf('/') === 0 ? sanitized : '';
       }
 
       function isAppsScriptRuntime_() {

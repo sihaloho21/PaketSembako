@@ -1019,8 +1019,8 @@
 
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
       const API_KEY_STORAGE_KEY = 'paketsembako_api_key';
-      const APP_PRIVATE_MODE = true;
-      const API_BASE = APP_PRIVATE_MODE ? '' : resolveApiBase_();
+      const DEFAULT_API_PROXY_PATH = '/.netlify/functions/gas-proxy';
+      const API_BASE = resolveApiBase_();
       const API_KEY = resolveApiKey_();
 
       function init() {
@@ -1047,13 +1047,13 @@
         document.getElementById('stockQty').addEventListener('input', updateStockPreview_);
         document.getElementById('btnStockAdd').addEventListener('click', saveStockMutationFromForm_);
 
-        if (!isAppsScriptRuntime_()) {
+        if (!isAppsScriptRuntime_() && !API_BASE) {
           setLoading(true);
           setStatus(getMissingApiMessage_(), true);
           renderWarning([
             'Runtime Apps Script tidak terdeteksi.',
-            'Mode private aktif.',
-            'Buka halaman Kasir dari URL Web App Google Apps Script, bukan dari Netlify.',
+            'Mode Netlify membutuhkan proxy API.',
+            'Pastikan Netlify Function gas-proxy aktif.',
           ]);
           return;
         }
@@ -1927,7 +1927,12 @@
         const success = typeof onSuccess === 'function' ? onSuccess : function () {};
         const failure = typeof onFailure === 'function' ? onFailure : function () {};
 
-        failure(new Error(getMissingApiMessage_()));
+        if (!API_BASE) {
+          failure(new Error(getMissingApiMessage_()));
+          return;
+        }
+
+        callApi_(functionName, payload).then(success).catch(failure);
       }
 
       function callApi_(functionName, payload) {
@@ -1944,7 +1949,7 @@
       }
 
       async function fetchApi_(action, method, payload) {
-        const url = new URL(API_BASE);
+        const url = new URL(API_BASE, window.location.origin);
         url.searchParams.set('action', action);
 
         const options = {
@@ -2012,13 +2017,15 @@
 
         try {
           const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
-          if (!storedApi) {
-            clearStoredApiBase_();
+          if (storedApi) {
+            return storedApi;
           }
-          return storedApi;
+          clearStoredApiBase_();
         } catch (err) {
-          return '';
+          // Abaikan jika storage tidak tersedia.
         }
+
+        return DEFAULT_API_PROXY_PATH;
       }
 
       function resolveApiKey_() {
@@ -2077,7 +2084,20 @@
           return;
         }
 
-        setStatus(getMissingApiMessage_(), true);
+        const fileMap = {
+          kasir: 'Kasir.html',
+          produk: 'Produk.html',
+          dashboard: 'Dashboard.html',
+        };
+        const targetFile = fileMap[view] || 'Kasir.html';
+        const url = new URL(targetFile, window.location.href);
+        if (API_BASE && API_BASE !== DEFAULT_API_PROXY_PATH) {
+          url.searchParams.set('apiBase', API_BASE);
+        }
+        if (API_KEY) {
+          url.searchParams.set('apiKey', API_KEY);
+        }
+        window.location.href = url.toString();
       }
 
       function withViewParam_(view) {
@@ -2129,13 +2149,23 @@
         }
 
         const sanitized = text.replace(/[?#].*$/, '').replace(/\/+$/, '');
-        if (!/^https?:\/\//i.test(sanitized)) {
-          return '';
-        }
         if (sanitized.indexOf('<') > -1 || sanitized.indexOf('>') > -1) {
           return '';
         }
-        return sanitized;
+
+        if (/^https?:\/\//i.test(sanitized)) {
+          try {
+            const targetOrigin = new URL(sanitized).origin;
+            if (targetOrigin !== window.location.origin) {
+              return '';
+            }
+          } catch (err) {
+            return '';
+          }
+          return sanitized;
+        }
+
+        return sanitized.indexOf('/') === 0 ? sanitized : '';
       }
 
       function clearStoredApiBase_() {
@@ -2147,7 +2177,7 @@
       }
 
       function getMissingApiMessage_() {
-        return 'Mode private aktif. Jalankan halaman Kasir dari Web App Apps Script.';
+        return 'API endpoint belum diset. Pastikan proxy Netlify aktif atau isi ?apiBase=...';
       }
 
       function getApiConnectionErrorMessage_() {

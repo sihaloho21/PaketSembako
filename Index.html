@@ -323,8 +323,8 @@
 
     <script>
       const API_BASE_STORAGE_KEY = 'paketsembako_api_base';
-      const APP_PRIVATE_MODE = true;
-      const API_BASE = APP_PRIVATE_MODE ? '' : resolveApiBase_();
+      const DEFAULT_API_PROXY_PATH = '/.netlify/functions/gas-proxy';
+      const API_BASE = resolveApiBase_();
 
       function init() {
         document.getElementById('btnKasir').addEventListener('click', function () {
@@ -343,9 +343,9 @@
           loadStatus();
         });
 
-        if (!isAppsScriptRuntime_()) {
+        if (!isAppsScriptRuntime_() && !API_BASE) {
           document.getElementById('metaInfo').textContent =
-            'Mode private aktif. Buka aplikasi lewat URL Web App Google Apps Script, bukan dari Netlify.';
+            'Mode Netlify aktif, tapi proxy API belum tersedia. Pastikan Netlify Function gas-proxy aktif.';
           return;
         }
 
@@ -374,7 +374,16 @@
           return;
         }
 
-        onFailure(new Error('Mode private aktif. Jalankan halaman ini dari Web App Apps Script.'));
+        if (!API_BASE) {
+          onFailure(new Error('API endpoint belum diset.'));
+          return;
+        }
+
+        const url = new URL(API_BASE, window.location.origin);
+        url.searchParams.set('action', 'status');
+        fetchApiJson_(url.toString(), { method: 'GET', cache: 'no-store' })
+          .then(onSuccess)
+          .catch(onFailure);
       }
 
       function renderStatus(payload) {
@@ -426,8 +435,17 @@
           return;
         }
 
-        document.getElementById('metaInfo').textContent =
-          'Mode private aktif. Navigasi tersedia jika dibuka dari Web App Apps Script.';
+        let fileName = 'Dashboard.html';
+        if (view === 'kasir') {
+          fileName = 'Kasir.html';
+        } else if (view === 'produk') {
+          fileName = 'Produk.html';
+        }
+        const url = new URL(fileName, window.location.href);
+        if (API_BASE && API_BASE !== DEFAULT_API_PROXY_PATH) {
+          url.searchParams.set('apiBase', API_BASE);
+        }
+        window.location.href = url.toString();
       }
 
       function withViewParam_(view) {
@@ -479,10 +497,15 @@
         }
 
         try {
-          return sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          const storedApi = sanitizeApiBase_(localStorage.getItem(API_BASE_STORAGE_KEY));
+          if (storedApi) {
+            return storedApi;
+          }
         } catch (err) {
-          return '';
+          // Abaikan jika storage tidak tersedia.
         }
+
+        return DEFAULT_API_PROXY_PATH;
       }
 
       function sanitizeApiBase_(value) {
@@ -490,7 +513,25 @@
         if (!text) {
           return '';
         }
-        return text.replace(/\/+$/, '');
+
+        const sanitized = text.replace(/[?#].*$/, '').replace(/\/+$/, '');
+        if (sanitized.indexOf('<') > -1 || sanitized.indexOf('>') > -1) {
+          return '';
+        }
+
+        if (/^https?:\/\//i.test(sanitized)) {
+          try {
+            const targetOrigin = new URL(sanitized).origin;
+            if (targetOrigin !== window.location.origin) {
+              return '';
+            }
+          } catch (err) {
+            return '';
+          }
+          return sanitized;
+        }
+
+        return sanitized.indexOf('/') === 0 ? sanitized : '';
       }
 
       function isAppsScriptRuntime_() {

@@ -19,6 +19,7 @@ const APP_CONFIG = {
   cachePrefix: 'dashboard:data:v',
   cacheVersionKey: 'dashboard_version',
   salesSnapshotBackfillRowKey: 'penjualan_snapshot_backfill_last_row',
+  apiProxyKeyProperty: 'API_PROXY_KEY',
   cacheTtlSeconds: 45,
   chartItemLimit: 20,
   pieItemLimit: 10,
@@ -418,6 +419,7 @@ function handleApiRequest_(e, method) {
   }
 
   try {
+    assertApiRequestAuthorized_(e, method);
     const data = executeApiAction_(action, method, e);
     return jsonOutput_({
       ok: true,
@@ -434,6 +436,33 @@ function handleApiRequest_(e, method) {
       generatedAt: new Date().toISOString(),
       error: err && err.message ? err.message : String(err),
     });
+  }
+}
+
+/**
+ * Validasi API key untuk endpoint JSON (opsional).
+ * Aktif jika Script Property dengan key APP_CONFIG.apiProxyKeyProperty diisi.
+ */
+function assertApiRequestAuthorized_(e, method) {
+  const requiredKey = safeText_(
+    PropertiesService.getScriptProperties().getProperty(APP_CONFIG.apiProxyKeyProperty)
+  );
+  if (!requiredKey) {
+    return;
+  }
+
+  const queryKey = safeText_(e && e.parameter && e.parameter.apiKey);
+  let bodyKey = '';
+
+  if (String(method || '').toUpperCase() === 'POST') {
+    const body = parseApiPayload_(e);
+    const payload = body && body.payload ? body.payload : body;
+    bodyKey = safeText_(payload && payload.apiKey);
+  }
+
+  const incomingKey = queryKey || bodyKey;
+  if (!incomingKey || incomingKey !== requiredKey) {
+    throw new Error('Unauthorized request.');
   }
 }
 
