@@ -140,7 +140,7 @@
       }
 
       #productSearch {
-        margin-bottom: 8px;
+        margin-bottom: 0;
       }
 
       .checkbox-inline {
@@ -675,6 +675,34 @@
         gap: 11px;
       }
 
+      .transaction-panel {
+        border-color: #bfd3e7;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 250, 255, 0.98));
+      }
+
+      .transaction-panel .panel-head h2 {
+        font-size: 20px;
+      }
+
+      .transaction-panel .panel-head p {
+        margin-top: 6px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .transaction-panel label {
+        font-size: 13px;
+        letter-spacing: 0.01em;
+      }
+
+      .transaction-panel input,
+      .transaction-panel select,
+      .transaction-panel button {
+        font-size: 16px;
+        padding: 14px 15px;
+        border-radius: 14px;
+      }
+
       .grid-2.align-end {
         align-items: end;
       }
@@ -683,15 +711,68 @@
         font-weight: 700;
       }
 
+      .transaction-stage {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid #c7d9ec;
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at top right, rgba(29, 78, 216, 0.08), transparent 34%),
+          linear-gradient(135deg, #fbfdff, #edf8f3);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
+
+      .transaction-stage-head {
+        display: grid;
+        gap: 5px;
+      }
+
+      .transaction-stage-kicker {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        color: #2f678b;
+      }
+
+      .transaction-stage-title {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #173552;
+      }
+
+      .transaction-stage-note {
+        font-size: 13px;
+        line-height: 1.55;
+        color: #58718a;
+      }
+
+      .search-field-wrap {
+        display: grid;
+        gap: 8px;
+      }
+
+      .search-field-wrap label {
+        font-size: 14px;
+        color: #173d5f;
+      }
+
+      .transaction-quick-help {
+        font-size: 12px;
+        color: #59728a;
+      }
+
       .selected-product {
-        min-height: 32px;
-        border-radius: 10px;
-        border: 1px dashed #c4d4e7;
+        min-height: 52px;
+        border-radius: 14px;
+        border: 1px dashed #c0d3e7;
         background: #f7fbff;
         color: #5e7690;
-        font-size: 12px;
+        font-size: 15px;
         font-weight: 600;
-        padding: 7px 10px;
+        line-height: 1.5;
+        padding: 12px 14px;
         display: flex;
         align-items: center;
       }
@@ -700,10 +781,45 @@
         border-color: #9ac6bb;
         background: #eefbf6;
         color: #0f6159;
+        box-shadow: 0 12px 28px rgba(15, 118, 110, 0.12);
       }
 
       .qty-row {
-        grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) auto;
+        grid-template-columns: minmax(150px, 190px) minmax(0, 1fr) minmax(210px, 240px);
+        gap: 12px;
+      }
+
+      .transaction-panel #productSearch {
+        min-height: 66px;
+        padding: 18px 18px;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        border: 1px solid #9fc0dc;
+        box-shadow: 0 16px 32px rgba(22, 48, 80, 0.08);
+      }
+
+      .transaction-panel #productSearch::placeholder {
+        font-size: 17px;
+        font-weight: 600;
+        color: #7b91a9;
+      }
+
+      .transaction-panel #qty {
+        text-align: center;
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      .transaction-panel #selectedTotal {
+        font-size: 19px;
+        font-weight: 800;
+      }
+
+      .transaction-panel #btnAddItem {
+        min-height: 60px;
+        font-size: 17px;
+        font-weight: 800;
       }
 
       .cart {
@@ -720,6 +836,16 @@
 
       .actions {
         margin-top: 10px;
+      }
+
+      .transaction-panel .product-meta {
+        margin-top: 2px;
+        padding: 14px;
+        border-radius: 16px;
+      }
+
+      .transaction-panel .meta-row {
+        font-size: 15px;
       }
 
       @media (max-width: 980px) {
@@ -761,8 +887,67 @@
         padding: 9px;
       }
 
+      body.sidebar-mode .transaction-panel .panel-head h2 {
+        font-size: 17px;
+      }
+
+      body.sidebar-mode .transaction-panel .panel-head p {
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      body.sidebar-mode .transaction-panel input,
+      body.sidebar-mode .transaction-panel select,
+      body.sidebar-mode .transaction-panel button {
+        font-size: 14px;
+        padding: 10px 11px;
+      }
+
+      body.sidebar-mode .transaction-stage {
+        gap: 9px;
+        padding: 11px;
+        border-radius: 14px;
+      }
+
+      body.sidebar-mode .transaction-stage-title {
+        font-size: 17px;
+      }
+
+      body.sidebar-mode .transaction-stage-note,
+      body.sidebar-mode .transaction-quick-help {
+        font-size: 11px;
+      }
+
       body.sidebar-mode .selected-product {
-        min-height: 34px;
+        min-height: 42px;
+        font-size: 13px;
+        padding: 9px 11px;
+      }
+
+      body.sidebar-mode .transaction-panel #productSearch {
+        min-height: 52px;
+        font-size: 18px;
+      }
+
+      body.sidebar-mode .transaction-panel #productSearch::placeholder {
+        font-size: 14px;
+      }
+
+      body.sidebar-mode .transaction-panel #qty {
+        font-size: 19px;
+      }
+
+      body.sidebar-mode .transaction-panel #selectedTotal {
+        font-size: 16px;
+      }
+
+      body.sidebar-mode .transaction-panel #btnAddItem {
+        min-height: 48px;
+        font-size: 15px;
+      }
+
+      body.sidebar-mode .transaction-panel .meta-row {
+        font-size: 13px;
       }
 
       body.sidebar-mode .page-menu {
@@ -783,7 +968,7 @@
       <div class="hero">
         <div>
           <h1>Form Kasir</h1>
-          <div class="sub">Pilih produk dari kolom pencarian, buat keranjang, lalu simpan sebagai satu invoice.</div>
+          <div class="sub">Pilih SKU produk dari kolom utama, buat keranjang, lalu simpan sebagai satu invoice.</div>
         </div>
         <div class="hero-badge">Mode Cart</div>
       </div>
@@ -810,10 +995,10 @@
       </div>
 
       <div class="form-grid">
-        <section class="panel">
+        <section class="panel transaction-panel">
           <div class="panel-head">
             <h2>Input Transaksi</h2>
-            <p>Pencarian produk sekarang langsung menjadi pemilih SKU.</p>
+            <p>Pilih SKU langsung dari kolom utama yang lebih besar, lalu isi qty untuk masuk ke keranjang.</p>
           </div>
 
           <div class="form">
@@ -828,30 +1013,39 @@
               </div>
             </div>
 
-            <div class="grid-2 align-end">
-              <div>
-                <label for="categoryFilter">Filter Kategori</label>
-                <select id="categoryFilter">
-                  <option value="">Semua Kategori</option>
-                </select>
+            <div class="transaction-stage">
+              <div class="transaction-stage-head">
+                <div class="transaction-stage-kicker">PILIH SKU</div>
+                <div class="transaction-stage-title">Pemilih SKU utama untuk kasir</div>
+                <div class="transaction-stage-note">Ketik SKU atau nama produk, lalu pilih item dari daftar saran yang muncul.</div>
               </div>
-              <div>
-                <label for="qty">Qty</label>
-                <input id="qty" type="number" min="1" step="1" placeholder="0" />
-              </div>
-            </div>
 
-            <div>
-              <label for="productSearch">Produk (SKU)</label>
-              <input
-                id="productSearch"
-                type="text"
-                list="productSuggestList"
-                placeholder="Cari SKU / nama produk, lalu pilih saran"
-                autocomplete="off"
-              />
-              <datalist id="productSuggestList"></datalist>
-              <div class="selected-product" id="selectedProduct">Belum ada produk dipilih.</div>
+              <div class="grid-2 align-end">
+                <div>
+                  <label for="categoryFilter">Filter Kategori</label>
+                  <select id="categoryFilter">
+                    <option value="">Semua Kategori</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="qty">Qty</label>
+                  <input id="qty" type="number" min="1" step="1" placeholder="0" />
+                </div>
+              </div>
+
+              <div class="search-field-wrap">
+                <label for="productSearch">SKU Produk</label>
+                <input
+                  id="productSearch"
+                  type="text"
+                  list="productSuggestList"
+                  placeholder="Contoh: BRS-001 atau Beras Premium"
+                  autocomplete="off"
+                />
+                <datalist id="productSuggestList"></datalist>
+                <div class="transaction-quick-help">Kolom besar ini langsung menjadi pemilih SKU aktif untuk transaksi.</div>
+                <div class="selected-product" id="selectedProduct">Belum ada SKU dipilih. Ketik SKU atau nama produk untuk mulai memilih.</div>
+              </div>
             </div>
 
             <div class="qty-row">
@@ -1312,7 +1506,7 @@
         }
 
         if (!item) {
-          badge.textContent = 'Belum ada produk dipilih.';
+          badge.textContent = 'Belum ada SKU dipilih. Ketik SKU atau nama produk untuk mulai memilih.';
           badge.classList.remove('active');
           return;
         }
@@ -1482,7 +1676,7 @@
         const item = productMap[sku];
 
         if (!item) {
-          setStatus('Pilih produk dari kolom "Produk (SKU)" terlebih dahulu.', true);
+          setStatus('Pilih produk dari kolom "SKU Produk" terlebih dahulu.', true);
           return;
         }
 
