@@ -383,37 +383,6 @@
         gap: 8px;
       }
 
-      .stock-section {
-        margin-top: 4px;
-        border: 1px solid #bfdac7;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #f2fbf4, #f8fff9);
-        padding: 11px;
-        display: grid;
-        gap: 10px;
-      }
-
-      .stock-head {
-        font-size: 13px;
-        font-weight: 800;
-        color: #276c3a;
-        letter-spacing: 0.01em;
-      }
-
-      .stock-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 130px;
-        gap: 10px;
-      }
-
-      .stock-meta {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        font-size: 12px;
-        color: #2a5d37;
-      }
-
       .status {
         margin-top: 12px;
         min-height: 18px;
@@ -492,7 +461,6 @@
       body.sidebar-mode .grid-2,
       body.sidebar-mode .product-row,
       body.sidebar-mode .qty-row,
-      body.sidebar-mode .stock-row,
       body.sidebar-mode .actions {
         grid-template-columns: 1fr;
         gap: 8px;
@@ -550,16 +518,6 @@
         font-size: 20px;
       }
 
-      body.sidebar-mode .stock-section {
-        margin-top: 2px;
-        padding: 8px;
-        gap: 8px;
-      }
-
-      body.sidebar-mode .stock-head {
-        font-size: 12px;
-      }
-
       body.sidebar-mode .status,
       body.sidebar-mode .warn,
       body.sidebar-mode .invoice {
@@ -582,7 +540,6 @@
         .grid-2,
         .product-row,
         .qty-row,
-        .stock-row,
         .actions {
           grid-template-columns: 1fr;
         }
@@ -765,10 +722,6 @@
         margin-top: 10px;
       }
 
-      .stock-section {
-        margin-top: 14px;
-      }
-
       @media (max-width: 980px) {
         .form-grid {
           grid-template-columns: 1fr;
@@ -788,7 +741,6 @@
         .summary,
         .grid-2,
         .qty-row,
-        .stock-row,
         .actions {
           grid-template-columns: 1fr;
         }
@@ -966,44 +918,6 @@
         </section>
       </div>
 
-      <section class="panel stock-section">
-        <div class="panel-head">
-          <h2>Tambah Stok Cepat</h2>
-          <p>Gunakan untuk restok tanpa keluar dari halaman kasir.</p>
-        </div>
-
-        <div class="form">
-          <div class="stock-row">
-            <div>
-              <label for="stockSku">SKU Produk</label>
-              <select id="stockSku">
-                <option value="">Memuat data produk...</option>
-              </select>
-            </div>
-            <div>
-              <label for="stockQty">Qty Tambah</label>
-              <input id="stockQty" type="number" min="1" step="1" placeholder="0" />
-            </div>
-          </div>
-
-          <div class="grid-2">
-            <div>
-              <label for="stockNote">Catatan Stok</label>
-              <input id="stockNote" type="text" placeholder="Contoh: Restok gudang" autocomplete="off" />
-            </div>
-            <div>
-              <label>Status Stok</label>
-              <div class="stock-meta">
-                <span>Sekarang: <strong id="stockCurrent">0</strong></span>
-                <span>Setelah Tambah: <strong id="stockAfter">0</strong></span>
-              </div>
-            </div>
-          </div>
-
-          <button id="btnStockAdd" class="btn btn-soft" type="button">Simpan Tambah Stok</button>
-        </div>
-      </section>
-
       <div class="invoice" id="invoiceInfo"></div>
       <div class="status" id="status"></div>
       <div class="warn" id="warn"></div>
@@ -1043,9 +957,6 @@
         document.getElementById('btnReload').addEventListener('click', function () {
           loadOptions();
         });
-        document.getElementById('stockSku').addEventListener('change', updateStockPreview_);
-        document.getElementById('stockQty').addEventListener('input', updateStockPreview_);
-        document.getElementById('btnStockAdd').addEventListener('click', saveStockMutationFromForm_);
 
         if (!isAppsScriptRuntime_() && !API_BASE) {
           setLoading(true);
@@ -1129,30 +1040,7 @@
           updateSelectedProductBadge_(null);
         }
 
-        const stockSelect = document.getElementById('stockSku');
-        const selectedStockSku = stockSelect.value;
-        stockSelect.innerHTML = '';
-
-        const stockDefault = document.createElement('option');
-        stockDefault.value = '';
-        stockDefault.textContent = products.length ? 'Pilih SKU untuk tambah stok' : 'Produk tidak tersedia';
-        stockSelect.appendChild(stockDefault);
-
-        products.forEach(function (item) {
-          const opt = document.createElement('option');
-          opt.value = item.sku;
-          opt.textContent = item.sku + ' - ' + item.namaProduk;
-          stockSelect.appendChild(opt);
-        });
-
-        if (selectedStockSku && productMap[selectedStockSku]) {
-          stockSelect.value = selectedStockSku;
-        } else if (selectedProductSku && productMap[selectedProductSku]) {
-          stockSelect.value = selectedProductSku;
-        }
-
         refreshCartPricingFromCatalog_();
-        updateStockPreview_();
       }
 
       function onCategoryFilterChange_() {
@@ -1789,61 +1677,6 @@
         );
       }
 
-      function updateStockPreview_() {
-        const sku = document.getElementById('stockSku').value;
-        const item = productMap[sku];
-        const qty = Number(document.getElementById('stockQty').value || 0);
-
-        const currentStock = item ? Number(item.stokTersedia) || 0 : 0;
-        const nextStock = item && qty > 0 ? round2(currentStock + qty) : currentStock;
-        const unit = item && item.satuan ? ' ' + item.satuan : '';
-
-        document.getElementById('stockCurrent').textContent = formatNumber(currentStock) + unit;
-        document.getElementById('stockAfter').textContent = formatNumber(nextStock) + unit;
-      }
-
-      function saveStockMutationFromForm_() {
-        const sku = document.getElementById('stockSku').value;
-        const qty = Number(document.getElementById('stockQty').value || 0);
-        const note = document.getElementById('stockNote').value.trim();
-
-        if (!sku) {
-          setStatus('Pilih SKU produk untuk tambah stok.', true);
-          return;
-        }
-        if (!qty || qty <= 0) {
-          setStatus('Qty tambah stok harus lebih dari 0.', true);
-          return;
-        }
-
-        setStatus('Menyimpan penambahan stok...', false);
-        setLoading(true);
-
-        callBackend_(
-          'saveStockMutation',
-          {
-            type: 'MASUK',
-            sku: sku,
-            qty: qty,
-            note: note,
-          },
-          function (res) {
-            const productName = (res && res.namaProduk) || sku;
-            const stockAfter = res && typeof res.stokSetelah !== 'undefined'
-              ? formatNumber(res.stokSetelah)
-              : '-';
-
-            document.getElementById('stockQty').value = '';
-            document.getElementById('stockNote').value = '';
-            loadOptions('Tambah stok berhasil untuk ' + productName + '. Stok baru: ' + stockAfter + '.');
-          },
-          function (error) {
-            setLoading(false);
-            setStatus('Gagal menambah stok: ' + extractError(error), true);
-          }
-        );
-      }
-
       function showInvoiceInfo_(message) {
         const box = document.getElementById('invoiceInfo');
         if (!message) {
@@ -1984,7 +1817,9 @@
         }
 
         if (!response.ok) {
-          throw new Error('HTTP ' + response.status + ' ' + response.statusText);
+          const serverMessage = json && json.error ? String(json.error) : '';
+          const detail = serverMessage ? ' - ' + serverMessage : '';
+          throw new Error('HTTP ' + response.status + ' ' + response.statusText + detail);
         }
 
         if (!json || json.ok !== true) {
@@ -2242,7 +2077,6 @@
         document.getElementById('btnReload').disabled = isLoading;
         document.getElementById('btnReset').disabled = isLoading || !cartItems.length;
         document.getElementById('btnSave').disabled = isLoading || !cartItems.length;
-        document.getElementById('btnStockAdd').disabled = isLoading;
       }
 
       function setStatus(message, isError) {
