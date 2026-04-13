@@ -560,7 +560,7 @@
       }
 
       .card {
-        max-width: 1180px;
+        max-width: 2000px;
         margin: 0 auto;
         border-radius: 20px;
         padding: 18px;
@@ -714,7 +714,7 @@
       .transaction-stage {
         display: grid;
         gap: 12px;
-        padding: 16px;
+        padding: 14px;
         border: 1px solid #c7d9ec;
         border-radius: 18px;
         background:
@@ -725,26 +725,19 @@
 
       .transaction-stage-head {
         display: grid;
-        gap: 5px;
-      }
-
-      .transaction-stage-kicker {
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.14em;
-        color: #2f678b;
+        gap: 4px;
       }
 
       .transaction-stage-title {
-        font-size: 22px;
+        font-size: 18px;
         font-weight: 800;
         letter-spacing: -0.02em;
         color: #173552;
       }
 
       .transaction-stage-note {
-        font-size: 13px;
-        line-height: 1.55;
+        font-size: 12px;
+        line-height: 1.5;
         color: #58718a;
       }
 
@@ -758,9 +751,78 @@
         color: #173d5f;
       }
 
+      .category-filter-wrap {
+        display: grid;
+        gap: 7px;
+      }
+
+      .category-chip-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 2px 1px 4px;
+        scrollbar-width: thin;
+      }
+
+      .category-chip-row::-webkit-scrollbar {
+        height: 7px;
+      }
+
+      .category-chip-row::-webkit-scrollbar-thumb {
+        background: #c4d6e8;
+        border-radius: 999px;
+      }
+
+      .category-chip {
+        width: auto;
+        min-width: max-content;
+        padding: 9px 14px;
+        border-radius: 999px;
+        border: 1px solid #c5d8ea;
+        background: linear-gradient(135deg, #ffffff, #f4f9ff);
+        color: #31516f;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      }
+
+      .category-chip:hover:not(:disabled) {
+        transform: translateY(-1px);
+        border-color: #98bddf;
+        box-shadow: 0 10px 20px rgba(20, 44, 73, 0.12);
+      }
+
+      .category-chip.active {
+        border-color: #8ecabc;
+        background: linear-gradient(135deg, #e6f8f3, #edf7ff);
+        color: #0f6159;
+        box-shadow: 0 10px 24px rgba(15, 118, 110, 0.12);
+      }
+
+      .category-chip:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+        transform: none;
+        box-shadow: none;
+      }
+
       .transaction-quick-help {
         font-size: 12px;
         color: #59728a;
+      }
+
+      .transaction-compact-grid {
+        display: grid;
+        grid-template-columns: minmax(130px, 150px) minmax(240px, 1fr) minmax(240px, 280px) minmax(220px, 240px);
+        gap: 12px;
+        align-items: end;
+      }
+
+      .transaction-field {
+        display: grid;
+        gap: 6px;
       }
 
       .selected-product {
@@ -822,6 +884,11 @@
         font-weight: 800;
       }
 
+      .transaction-panel .category-filter-wrap label,
+      .transaction-panel .transaction-field label {
+        margin-bottom: 0;
+      }
+
       .cart {
         overflow: auto;
       }
@@ -852,6 +919,10 @@
         .form-grid {
           grid-template-columns: 1fr;
         }
+
+        .transaction-compact-grid {
+          grid-template-columns: 1fr 1fr;
+        }
       }
 
       @media (max-width: 760px) {
@@ -867,7 +938,8 @@
         .summary,
         .grid-2,
         .qty-row,
-        .actions {
+        .actions,
+        .transaction-compact-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -916,6 +988,16 @@
       body.sidebar-mode .transaction-stage-note,
       body.sidebar-mode .transaction-quick-help {
         font-size: 11px;
+      }
+
+      body.sidebar-mode .category-chip {
+        padding: 8px 12px;
+        font-size: 11px;
+      }
+
+      body.sidebar-mode .transaction-compact-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
       }
 
       body.sidebar-mode .selected-product {
@@ -1015,22 +1097,8 @@
 
             <div class="transaction-stage">
               <div class="transaction-stage-head">
-                <div class="transaction-stage-kicker">PILIH SKU</div>
-                <div class="transaction-stage-title">Pemilih SKU utama untuk kasir</div>
-                <div class="transaction-stage-note">Ketik SKU atau nama produk, lalu pilih item dari daftar saran yang muncul.</div>
-              </div>
-
-              <div class="grid-2 align-end">
-                <div>
-                  <label for="categoryFilter">Filter Kategori</label>
-                  <select id="categoryFilter">
-                    <option value="">Semua Kategori</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="qty">Qty</label>
-                  <input id="qty" type="number" min="1" step="1" placeholder="0" />
-                </div>
+                <div class="transaction-stage-title">Pilih Produk</div>
+                <div class="transaction-stage-note">Ketik SKU atau nama produk, lalu atur qty dan tambah ke keranjang.</div>
               </div>
 
               <div class="search-field-wrap">
@@ -1043,28 +1111,41 @@
                   autocomplete="off"
                 />
                 <datalist id="productSuggestList"></datalist>
-                <div class="transaction-quick-help">Kolom besar ini langsung menjadi pemilih SKU aktif untuk transaksi.</div>
+                <div class="transaction-quick-help">Kolom ini langsung menjadi pemilih SKU aktif untuk transaksi.</div>
                 <div class="selected-product" id="selectedProduct">Belum ada SKU dipilih. Ketik SKU atau nama produk untuk mulai memilih.</div>
               </div>
-            </div>
 
-            <div class="qty-row">
-              <div>
-                <label for="itemNote">Catatan Item</label>
-                <input id="itemNote" type="text" placeholder="Opsional" autocomplete="off" />
+              <div class="category-filter-wrap">
+                <label>Filter Kategori</label>
+                <input id="categoryFilter" type="hidden" value="" />
+                <div class="category-chip-row" id="categoryFilterRow" role="group" aria-label="Filter kategori kasir"></div>
               </div>
-              <div>
-                <div class="subtotal-head">
-                  <label for="selectedTotal">Subtotal Item Dipilih</label>
-                  <span id="priceModeBadge" class="mode-badge auto">AUTO</span>
+
+              <div class="transaction-compact-grid">
+                <div class="transaction-field">
+                  <label for="qty">Qty</label>
+                  <input id="qty" type="number" min="1" step="1" placeholder="0" />
                 </div>
-                <input id="selectedTotal" type="text" value="Rp0" placeholder="Aktifkan toggle untuk ubah manual" autocomplete="off" readonly />
-                <label class="checkbox-inline" for="manualPriceToggle">
-                  <input id="manualPriceToggle" type="checkbox" />
-                  <span>Gunakan harga manual</span>
-                </label>
+
+                <div class="transaction-field">
+                  <label for="itemNote">Catatan Item</label>
+                  <input id="itemNote" type="text" placeholder="Opsional" autocomplete="off" />
+                </div>
+
+                <div class="transaction-field">
+                  <div class="subtotal-head">
+                    <label for="selectedTotal">Subtotal Item</label>
+                    <span id="priceModeBadge" class="mode-badge auto">AUTO</span>
+                  </div>
+                  <input id="selectedTotal" type="text" value="Rp0" placeholder="Aktifkan toggle untuk ubah manual" autocomplete="off" readonly />
+                  <label class="checkbox-inline" for="manualPriceToggle">
+                    <input id="manualPriceToggle" type="checkbox" />
+                    <span>Gunakan harga manual</span>
+                  </label>
+                </div>
+
+                <button id="btnAddItem" class="btn btn-soft" type="button">Tambah ke Keranjang</button>
               </div>
-              <button id="btnAddItem" class="btn btn-soft" type="button">Tambah ke Keranjang</button>
             </div>
 
             <div class="product-meta">
@@ -1136,7 +1217,7 @@
         window.addEventListener('resize', applySidebarDensityMode_);
         setupPageMenu_('kasir');
 
-        document.getElementById('categoryFilter').addEventListener('change', onCategoryFilterChange_);
+        document.getElementById('categoryFilterRow').addEventListener('click', onCategoryFilterClick_);
         document.getElementById('productSearch').addEventListener('input', onProductSearchInput_);
         document.getElementById('productSearch').addEventListener('change', onProductSearchCommit_);
         document.getElementById('productSearch').addEventListener('blur', onProductSearchCommit_);
@@ -1199,28 +1280,16 @@
 
         const selectedSku = selectedProductSku;
 
-        const categorySelect = document.getElementById('categoryFilter');
-        const selectedCategory = categorySelect.value;
+        const categoryInput = document.getElementById('categoryFilter');
+        const selectedCategory = safeText_(categoryInput.value);
         const categories = getCategoryOptions_();
         const validSelectedCategory = selectedCategory && categories.indexOf(selectedCategory) > -1
           ? selectedCategory
           : '';
         const searchInput = document.getElementById('productSearch');
         const currentSearch = searchInput ? searchInput.value : '';
-
-        categorySelect.innerHTML = '';
-        const defaultCategoryOption = document.createElement('option');
-        defaultCategoryOption.value = '';
-        defaultCategoryOption.textContent = 'Semua Kategori';
-        categorySelect.appendChild(defaultCategoryOption);
-
-        categories.forEach(function (kategori) {
-          const opt = document.createElement('option');
-          opt.value = kategori;
-          opt.textContent = kategori;
-          categorySelect.appendChild(opt);
-        });
-        categorySelect.value = validSelectedCategory;
+        categoryInput.value = validSelectedCategory;
+        renderCategoryFilterRow_(categories, validSelectedCategory);
 
         refreshProductSuggestions_(validSelectedCategory, currentSearch);
         const matchedSkuFromSearch = findSkuBySearchTerm_(currentSearch, validSelectedCategory);
@@ -1239,6 +1308,18 @@
 
       function onCategoryFilterChange_() {
         applyProductSearchFilter_({ syncSearchLabel: false });
+      }
+
+      function onCategoryFilterClick_(event) {
+        const button = event.target.closest('.category-chip');
+        if (!button || isLoading) {
+          return;
+        }
+
+        const value = safeText_(button.getAttribute('data-value'));
+        document.getElementById('categoryFilter').value = value;
+        renderCategoryFilterRow_(getCategoryOptions_(), value);
+        onCategoryFilterChange_();
       }
 
       function onProductSearchInput_() {
@@ -1308,6 +1389,30 @@
           return a.localeCompare(b, 'id');
         });
         return categories;
+      }
+
+      function renderCategoryFilterRow_(categories, selectedValue) {
+        const row = document.getElementById('categoryFilterRow');
+        if (!row) {
+          return;
+        }
+
+        const items = [''].concat(Array.isArray(categories) ? categories : []);
+        const current = safeText_(selectedValue);
+        row.innerHTML = '';
+
+        items.forEach(function (kategori) {
+          const btn = document.createElement('button');
+          const isDefault = !kategori;
+
+          btn.type = 'button';
+          btn.className = 'category-chip' + (current === kategori ? ' active' : '');
+          btn.setAttribute('data-value', kategori);
+          btn.setAttribute('aria-pressed', current === kategori ? 'true' : 'false');
+          btn.textContent = isDefault ? 'Semua Kategori' : kategori;
+          btn.disabled = isLoading;
+          row.appendChild(btn);
+        });
       }
 
       function getFilteredProductsByFilter_(categoryValue, searchTerm) {
@@ -2271,6 +2376,9 @@
         document.getElementById('btnReload').disabled = isLoading;
         document.getElementById('btnReset').disabled = isLoading || !cartItems.length;
         document.getElementById('btnSave').disabled = isLoading || !cartItems.length;
+        document.querySelectorAll('.category-chip').forEach(function (btn) {
+          btn.disabled = isLoading;
+        });
       }
 
       function setStatus(message, isError) {
